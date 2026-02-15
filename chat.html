@@ -1,0 +1,1825 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgentScope -- Alibaba</title>
+    <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone@7.21.4/babel.min.js"></script>
+    <script src="https://unpkg.com/marked@4.3.0/marked.min.js"></script>
+    <script src="https://unpkg.com/three@0.160.0/build/three.min.js"></script>
+    <script>
+        // 性能监控
+        console.log('🕐 HTML 解析完成:', new Date().toISOString());
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('✅ DOM 加载完成:', new Date().toISOString());
+        });
+        window.addEventListener('load', () => {
+            console.log('✅ 所有资源加载完成:', new Date().toISOString());
+            if (window.performance) {
+                const perfData = window.performance.timing;
+                const pageLoadTime = perfData.loadEventEnd - perfData.navigationStart;
+                const domReadyTime = perfData.domContentLoadedEventEnd - perfData.navigationStart;
+                const resourceLoadTime = perfData.loadEventEnd - perfData.domContentLoadedEventEnd;
+                console.log('📊 页面加载耗时:', pageLoadTime + 'ms');
+                console.log('📊 DOM解析耗时:', domReadyTime + 'ms');
+                console.log('📊 资源加载耗时:', resourceLoadTime + 'ms');
+            }
+        });
+    </script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+            background: #e3f2fd;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+
+        #three-background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        #root {
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            gap: 20px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 900px;
+            height: 90vh;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 12px;
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.15),
+                0 2px 8px rgba(0, 0, 0, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.8),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.05);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.5);
+            position: relative;
+            backdrop-filter: blur(10px);
+        }
+
+        .chat-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .chat-container::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 1;
+        }
+
+        .chat-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #e8e8e8;
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            color: white;
+            border-radius: 8px 8px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+        }
+
+        .chat-header::before {
+            content: '☁️';
+            position: absolute;
+            left: 20px;
+            font-size: 24px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% {
+                transform: translateY(0px);
+            }
+            50% {
+                transform: translateY(-5px);
+            }
+        }
+
+        .chat-header-left {
+            margin-left: 40px;
+        }
+
+        .chat-header-left h1 {
+            font-size: 20px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        .new-chat-button {
+            padding: 8px 20px;
+            background: rgba(255, 255, 255, 0.25);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .new-chat-button:hover {
+            background: white;
+            color: #1890ff;
+            border-color: white;
+        }
+
+        .chat-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            position: relative;
+            z-index: 2;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Ctext x='50' y='100' font-size='24' font-family='Arial' fill='rgba(100,181,246,0.08)' transform='rotate(-45 200 200)'%3Eagentscope%3C/text%3E%3Ctext x='50' y='250' font-size='24' font-family='Arial' fill='rgba(100,181,246,0.08)' transform='rotate(-45 200 200)'%3Eagentscope%3C/text%3E%3Ctext x='200' y='175' font-size='24' font-family='Arial' fill='rgba(100,181,246,0.08)' transform='rotate(-45 200 200)'%3Eagentscope%3C/text%3E%3C/svg%3E");
+            background-repeat: repeat;
+        }
+
+        .plan-bubble {
+            width: 350px;
+            height: 90vh;
+            background: linear-gradient(135deg, rgba(24, 144, 255, 0.95) 0%, rgba(0, 100, 200, 0.95) 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 
+                0 8px 32px rgba(0, 0, 0, 0.15),
+                0 2px 8px rgba(0, 0, 0, 0.1),
+                inset 0 1px 0 rgba(255, 255, 255, 0.3);
+            font-size: 14px;
+            line-height: 1.6;
+            animation: slideIn 0.3s ease-out;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            border: 1px solid rgba(255,255,255,0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .plan-bubble strong {
+            font-size: 15px;
+        }
+
+        .plan-description {
+            margin-top: 8px;
+            opacity: 0.95;
+            font-size: 13px;
+        }
+
+        .plan-subtasks {
+            margin-top: 12px;
+        }
+
+        .subtask-item {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 8px 12px;
+            border-radius: 8px;
+            margin-top: 6px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }
+
+        .subtask-state {
+            font-size: 16px;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .subtask-content {
+            flex: 1;
+        }
+
+        .subtask-name {
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .subtask-description {
+            font-size: 12px;
+            opacity: 0.9;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 80%;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            color: white;
+        }
+
+        .message.assistant .message-bubble {
+            background: #f0f0f0;
+            color: #333;
+        }
+
+        .message-content-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .message-content-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .message-content-item.text {
+            background: transparent;
+            color: #333;
+            line-height: 1.8;
+        }
+
+        .message-content-item.tool_use {
+            background: rgba(255, 152, 0, 0.1);
+            color: #e65100;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-left: 3px solid #ff9800;
+            position: relative;
+        }
+
+        .message-content-item.tool_use.loading::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 3px;
+            background: linear-gradient(to bottom, 
+                rgba(255, 152, 0, 0) 0%,
+                rgba(255, 152, 0, 0.8) 50%,
+                rgba(255, 152, 0, 0) 100%);
+            background-size: 100% 200%;
+            animation: loading-slide 1.5s ease-in-out infinite;
+        }
+
+        @keyframes loading-slide {
+            0% {
+                background-position: 0% 0%;
+            }
+            50% {
+                background-position: 0% 100%;
+            }
+            100% {
+                background-position: 0% 0%;
+            }
+        }
+
+        .message-content-item.tool_use:hover {
+            background: rgba(255, 152, 0, 0.15);
+        }
+
+        .message-content-item.tool_result {
+            background: rgba(76, 175, 80, 0.1);
+            color: #2e7d32;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-left: 16px;
+            border-left: 3px solid #4caf50;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .tool-use-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tool-use-toggle {
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .tool-use-toggle.expanded {
+            transform: rotate(90deg);
+        }
+
+        .message-content-item.error {
+            background: rgba(244, 67, 54, 0.1);
+            color: #c62828;
+        }
+
+        .chat-input-container {
+            padding: 20px;
+            border-top: 1px solid #e0e0e0;
+            display: flex;
+            gap: 12px;
+            position: relative;
+            z-index: 2;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 10px 16px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: #1890ff;
+            box-shadow: 0 0 0 2px rgba(24, 144, 255, 0.1);
+        }
+
+        .chat-input:disabled {
+            background: #f5f5f5;
+            cursor: not-allowed;
+        }
+
+        .send-button {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .send-button:hover:not(:disabled) {
+            opacity: 0.9;
+            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+        }
+
+        .send-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .deep-search-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: #fafafa;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.2s;
+            user-select: none;
+        }
+
+        .deep-search-toggle:hover {
+            background: #f0f0f0;
+            border-color: #1890ff;
+        }
+
+        .deep-search-toggle.active {
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            color: white;
+            border-color: #1890ff;
+        }
+
+        .toggle-switch {
+            width: 36px;
+            height: 20px;
+            background: #ccc;
+            border-radius: 10px;
+            position: relative;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: transform 0.3s;
+        }
+
+        .deep-search-toggle.active .toggle-switch {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .deep-search-toggle.active .toggle-switch::after {
+            transform: translateX(16px);
+        }
+
+        .toggle-label {
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .loading-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #1890ff;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        /* tool_use loading 样式 */
+        .tool-use-loading {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            margin-left: 8px;
+        }
+
+        .tool-use-loading-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #ff9800;
+            animation: bounce 1.4s ease-in-out infinite;
+        }
+
+        .tool-use-loading-dot:nth-child(1) {
+            animation-delay: 0s;
+        }
+
+        .tool-use-loading-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .tool-use-loading-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+            0%, 80%, 100% {
+                transform: scale(0);
+                opacity: 0.5;
+            }
+            40% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .chat-messages::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 3px;
+        }
+
+        .chat-messages::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        /* Markdown 样式 */
+        .markdown-content {
+            line-height: 1.8;
+        }
+
+        .markdown-content h1,
+        .markdown-content h2,
+        .markdown-content h3,
+        .markdown-content h4,
+        .markdown-content h5,
+        .markdown-content h6 {
+            margin-top: 16px;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .markdown-content h1 { font-size: 1.8em; }
+        .markdown-content h2 { font-size: 1.5em; }
+        .markdown-content h3 { font-size: 1.3em; }
+
+        .markdown-content p {
+            margin-bottom: 8px;
+        }
+
+        .markdown-content code {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .markdown-content pre {
+            background: rgba(0, 0, 0, 0.05);
+            padding: 12px;
+            border-radius: 6px;
+            overflow-x: auto;
+            margin: 8px 0;
+        }
+
+        .markdown-content pre code {
+            background: none;
+            padding: 0;
+        }
+
+        .markdown-content ul,
+        .markdown-content ol {
+            margin-left: 20px;
+            margin-bottom: 8px;
+        }
+
+        .markdown-content li {
+            margin-bottom: 4px;
+        }
+
+        .markdown-content blockquote {
+            border-left: 3px solid #1890ff;
+            padding-left: 12px;
+            margin: 8px 0;
+            color: #666;
+            background: #e6f7ff;
+            padding: 8px 12px;
+        }
+
+        .markdown-content a {
+            color: #1890ff;
+            text-decoration: none;
+        }
+
+        .markdown-content a:hover {
+            text-decoration: underline;
+        }
+
+        .markdown-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 8px 0;
+        }
+
+        .markdown-content table th,
+        .markdown-content table td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+
+        .markdown-content table th {
+            background: #fafafa;
+            font-weight: 500;
+        }
+
+        .markdown-content img {
+            max-width: 100%;
+            height: auto;
+            border-radius: 6px;
+            display: block;
+        }
+
+        /* CD 旋转动画 */
+        .music-player {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.95);
+            padding: 12px 20px;
+            border-radius: 50px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.5);
+        }
+
+        .cd-container {
+            position: relative;
+            width: 45px;
+            height: 45px;
+        }
+
+        .cd-disc {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #1a1a1a 0%, #3a3a3a 100%);
+            box-shadow: 
+                inset 0 0 0 8px rgba(255, 255, 255, 0.1),
+                inset 0 0 0 9px rgba(0, 0, 0, 0.3),
+                0 2px 8px rgba(0, 0, 0, 0.3);
+            position: relative;
+        }
+
+        .cd-disc:not(.paused) {
+            animation: rotate 4s linear infinite;
+        }
+
+        .cd-disc::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 12px;
+            height: 12px;
+            background: radial-gradient(circle, #888 0%, #333 100%);
+            border-radius: 50%;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+        }
+
+        .cd-disc::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            background: conic-gradient(
+                from 0deg,
+                rgba(255, 255, 255, 0.1) 0deg,
+                transparent 90deg,
+                transparent 180deg,
+                rgba(255, 255, 255, 0.1) 270deg,
+                transparent 360deg
+            );
+        }
+
+        @keyframes rotate {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .music-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .music-title {
+            font-size: 13px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .music-artist {
+            font-size: 11px;
+            color: #666;
+        }
+
+        .music-player:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+            transition: all 0.3s ease;
+        }
+
+        .play-pause-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            border: none;
+            color: white;
+            font-size: 14px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+        }
+
+        .play-pause-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 4px 12px rgba(24, 144, 255, 0.5);
+        }
+
+        .play-pause-btn:active {
+            transform: scale(0.95);
+        }
+
+        .cd-disc.paused {
+            animation-play-state: paused;
+        }
+
+        /* 技能提示框样式 */
+        .skill-suggestions {
+            position: absolute;
+            bottom: 100%;
+            left: 0;
+            right: 0;
+            background: white;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.15);
+            max-height: 300px;
+            overflow-y: auto;
+            z-index: 1000;
+            margin-bottom: 8px;
+        }
+
+        .skill-item {
+            padding: 12px 16px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .skill-item:last-child {
+            border-bottom: none;
+        }
+
+        .skill-item:hover,
+        .skill-item.selected {
+            background: #e6f7ff;
+        }
+
+        .skill-name {
+            font-weight: 500;
+            color: #1890ff;
+            margin-bottom: 4px;
+        }
+
+        .skill-description {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .skill-suggestions-empty {
+            padding: 12px 16px;
+            color: #999;
+            text-align: center;
+        }
+
+        /* 打断按钮样式 */
+        .stop-button {
+            padding: 10px 24px;
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: 400;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stop-button:hover {
+            opacity: 0.9;
+            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+        }
+
+        .stop-button:active {
+            transform: scale(0.95);
+        }
+
+        .stop-icon {
+            width: 12px;
+            height: 12px;
+            background: white;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="three-background"></canvas>
+    
+    <!-- CD 音乐播放器 -->
+    <div class="music-player">
+        <div class="cd-container">
+            <div class="cd-disc" id="cd-disc"></div>
+        </div>
+        <div class="music-info">
+            <div class="music-title" id="music-status">已暂停</div>
+            <div class="music-artist">周杰伦 - 星晴</div>
+        </div>
+        <button class="play-pause-btn" id="playPauseBtn" title="播放/暂停">▶</button>
+    </div>
+    
+    <div id="root"></div>
+    
+    <!-- 背景音乐 -->
+    <audio id="bgm" loop preload="auto">
+        <source src="/music/jay-xingqing.mp4" type="audio/mp4">
+        您的浏览器不支持音频播放。
+    </audio>
+    <script>
+        // 手动控制音乐播放
+        const bgm = document.getElementById('bgm');
+        const playPauseBtn = document.getElementById('playPauseBtn');
+        const cdDisc = document.getElementById('cd-disc');
+        const musicStatus = document.getElementById('music-status');
+        let isPlaying = false;
+        
+        bgm.volume = 0.3;
+        
+        // 初始状态：CD 静止
+        cdDisc.classList.add('paused');
+        
+        // 播放/暂停切换函数
+        function togglePlayPause() {
+            if (isPlaying) {
+                bgm.pause();
+                playPauseBtn.textContent = '▶';
+                cdDisc.classList.add('paused');
+                musicStatus.textContent = '已暂停';
+                isPlaying = false;
+            } else {
+                bgm.play().catch(e => {
+                    console.log('音频播放失败:', e);
+                    playPauseBtn.textContent = '▶';
+                });
+                playPauseBtn.textContent = '⏸';
+                cdDisc.classList.remove('paused');
+                musicStatus.textContent = '正在播放';
+                isPlaying = true;
+            }
+        }
+        
+        // 绑定播放/暂停按钮事件
+        playPauseBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            togglePlayPause();
+        });
+        
+        // 监听音频播放状态变化
+        bgm.addEventListener('play', () => {
+            playPauseBtn.textContent = '⏸';
+            cdDisc.classList.remove('paused');
+            musicStatus.textContent = '正在播放';
+            isPlaying = true;
+        });
+        
+        bgm.addEventListener('pause', () => {
+            playPauseBtn.textContent = '▶';
+            cdDisc.classList.add('paused');
+            musicStatus.textContent = '已暂停';
+            isPlaying = false;
+        });
+    </script>
+
+    <script>
+        // Three.js 天空飞翔背景
+        const canvas = document.getElementById('three-background');
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setClearColor(0x87CEEB, 1); // 天空蓝色
+        
+        // 创建更真实的云朵（使用多个球体组合）
+        const clouds = [];
+        for (let i = 0; i < 30; i++) {
+            const cloudGroup = new THREE.Group();
+            const numPuffs = 5 + Math.floor(Math.random() * 5);
+            
+            for (let j = 0; j < numPuffs; j++) {
+                const puffGeometry = new THREE.SphereGeometry(
+                    Math.random() * 0.8 + 0.5,
+                    16,
+                    16
+                );
+                const puffMaterial = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0.7 + Math.random() * 0.2
+                });
+                const puff = new THREE.Mesh(puffGeometry, puffMaterial);
+                puff.position.x = (Math.random() - 0.5) * 3;
+                puff.position.y = (Math.random() - 0.5) * 1.5;
+                puff.position.z = (Math.random() - 0.5) * 2;
+                cloudGroup.add(puff);
+            }
+            
+            cloudGroup.position.x = Math.random() * 100 - 50;
+            cloudGroup.position.y = Math.random() * 30 - 10;
+            cloudGroup.position.z = Math.random() * -100 - 10;
+            cloudGroup.scale.set(
+                Math.random() * 1.5 + 1,
+                Math.random() * 0.8 + 0.6,
+                Math.random() * 1.2 + 0.8
+            );
+            clouds.push(cloudGroup);
+            scene.add(cloudGroup);
+        }
+        
+        // 创建热气球（增加数量到10个）
+        const balloons = [];
+        for (let i = 0; i < 10; i++) {
+            const balloonGroup = new THREE.Group();
+            
+            // 气球主体
+            const balloonGeometry = new THREE.SphereGeometry(1.5, 16, 16);
+            const colors = [
+                0xff6b6b, 0x4ecdc4, 0xffe66d, 0x95e1d3, 
+                0xf38181, 0xaa96da, 0xfcbad3, 0xa8e6cf,
+                0xff9ff3, 0xfeca57
+            ];
+            const balloonMaterial = new THREE.MeshBasicMaterial({
+                color: colors[i],
+                transparent: true,
+                opacity: 0.85
+            });
+            const balloon = new THREE.Mesh(balloonGeometry, balloonMaterial);
+            balloon.scale.y = 1.2;
+            balloonGroup.add(balloon);
+            
+            // 篮子
+            const basketGeometry = new THREE.BoxGeometry(0.8, 0.6, 0.8);
+            const basketMaterial = new THREE.MeshBasicMaterial({ color: 0x8B4513 });
+            const basket = new THREE.Mesh(basketGeometry, basketMaterial);
+            basket.position.y = -2;
+            balloonGroup.add(basket);
+            
+            // 连接线
+            const lineMaterial = new THREE.LineBasicMaterial({ color: 0x333333 });
+            for (let j = 0; j < 4; j++) {
+                const points = [];
+                points.push(new THREE.Vector3(
+                    Math.cos(j * Math.PI / 2) * 0.8,
+                    -1.2,
+                    Math.sin(j * Math.PI / 2) * 0.8
+                ));
+                points.push(new THREE.Vector3(
+                    Math.cos(j * Math.PI / 2) * 0.4,
+                    -2,
+                    Math.sin(j * Math.PI / 2) * 0.4
+                ));
+                const lineGeometry = new THREE.BufferGeometry().setFromPoints(points);
+                const line = new THREE.Line(lineGeometry, lineMaterial);
+                balloonGroup.add(line);
+            }
+            
+            // 分布在整个天空中（更广的范围）
+            balloonGroup.position.x = Math.random() * 120 - 60;
+            balloonGroup.position.y = Math.random() * 30 + 5;
+            balloonGroup.position.z = Math.random() * -120 - 20;
+            balloons.push({
+                group: balloonGroup,
+                speed: Math.random() * 0.015 + 0.008,
+                floatOffset: Math.random() * Math.PI * 2
+            });
+            scene.add(balloonGroup);
+        }
+        
+        // 创建飞机（更逼真的设计）
+        const planes = [];
+        for (let i = 0; i < 2; i++) {
+            const planeGroup = new THREE.Group();
+            
+            // 机身（流线型）
+            const bodyGeometry = new THREE.CylinderGeometry(0.25, 0.35, 4, 12);
+            const bodyMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+            body.rotation.z = Math.PI / 2;
+            planeGroup.add(body);
+            
+            // 机头（圆锥形）
+            const noseGeometry = new THREE.ConeGeometry(0.25, 0.8, 12);
+            const nose = new THREE.Mesh(noseGeometry, bodyMaterial);
+            nose.rotation.z = -Math.PI / 2;
+            nose.position.x = 2.4;
+            planeGroup.add(nose);
+            
+            // 主机翼（更大更真实）
+            const wingGeometry = new THREE.BoxGeometry(8, 0.08, 2);
+            const wingMaterial = new THREE.MeshBasicMaterial({ color: 0xe0e0e0 });
+            const wings = new THREE.Mesh(wingGeometry, wingMaterial);
+            wings.position.x = 0.5;
+            planeGroup.add(wings);
+            
+            // 机翼翼尖
+            const wingTipGeometry = new THREE.BoxGeometry(0.3, 0.08, 0.3);
+            const wingTipMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+            const wingTip1 = new THREE.Mesh(wingTipGeometry, wingTipMaterial);
+            wingTip1.position.set(0.5, 0, 1.15);
+            planeGroup.add(wingTip1);
+            const wingTip2 = wingTip1.clone();
+            wingTip2.position.z = -1.15;
+            planeGroup.add(wingTip2);
+            
+            // 尾翼（垂直）
+            const vTailGeometry = new THREE.BoxGeometry(0.08, 1.5, 1.2);
+            const vTail = new THREE.Mesh(vTailGeometry, wingMaterial);
+            vTail.position.x = -1.5;
+            planeGroup.add(vTail);
+            
+            // 水平尾翼
+            const hTailGeometry = new THREE.BoxGeometry(0.08, 2.5, 0.8);
+            const hTail = new THREE.Mesh(hTailGeometry, wingMaterial);
+            hTail.rotation.x = Math.PI / 2;
+            hTail.position.set(-1.5, 0.7, 0);
+            planeGroup.add(hTail);
+            
+            // 引擎
+            const engineGeometry = new THREE.CylinderGeometry(0.3, 0.3, 0.8, 12);
+            const engineMaterial = new THREE.MeshBasicMaterial({ color: 0x555555 });
+            const engine1 = new THREE.Mesh(engineGeometry, engineMaterial);
+            engine1.rotation.z = Math.PI / 2;
+            engine1.position.set(0.5, 0, 2);
+            planeGroup.add(engine1);
+            const engine2 = engine1.clone();
+            engine2.position.z = -2;
+            planeGroup.add(engine2);
+            
+            // 驾驶舱窗户
+            const windowGeometry = new THREE.SphereGeometry(0.3, 8, 8);
+            const windowMaterial = new THREE.MeshBasicMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.8 });
+            const window1 = new THREE.Mesh(windowGeometry, windowMaterial);
+            window1.position.set(1.3, 0.3, 0);
+            window1.scale.set(0.8, 0.6, 0.6);
+            planeGroup.add(window1);
+            
+            planeGroup.position.x = i === 0 ? -50 : 60;
+            planeGroup.position.y = Math.random() * 10 + 8;
+            planeGroup.position.z = Math.random() * -80 - 40;
+            planeGroup.rotation.y = i === 0 ? Math.PI / 8 : -Math.PI / 8;
+            planeGroup.scale.set(0.8, 0.8, 0.8);
+            planes.push({
+                group: planeGroup,
+                speed: 0.4 + Math.random() * 0.2,
+                direction: i === 0 ? 1 : -1,
+                wobble: Math.random() * Math.PI * 2
+            });
+            scene.add(planeGroup);
+        }
+        
+        // 添加星星粒子（减少数量）
+        const particlesGeometry = new THREE.BufferGeometry();
+        const particlesCount = 100;
+        const posArray = new Float32Array(particlesCount * 3);
+        
+        for (let i = 0; i < particlesCount * 3; i++) {
+            posArray[i] = (Math.random() - 0.5) * 200;
+        }
+        
+        particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+        const particlesMaterial = new THREE.PointsMaterial({
+            size: 0.2,
+            color: 0xffffff,
+            transparent: true,
+            opacity: 0.5
+        });
+        
+        const particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+        scene.add(particlesMesh);
+        
+        camera.position.z = 5;
+        camera.position.y = 0;
+        
+        let time = 0;
+        
+        // 动画循环
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.01;
+            
+            // 云朵向前移动并轻微漂浮
+            clouds.forEach((cloud, index) => {
+                cloud.position.z += 0.05 + index * 0.002;
+                cloud.position.y += Math.sin(time + index) * 0.01;
+                if (cloud.position.z > 10) {
+                    cloud.position.z = -100;
+                    cloud.position.x = Math.random() * 100 - 50;
+                }
+            });
+            
+            // 热气球漂浮
+            balloons.forEach(balloon => {
+                balloon.group.position.z += balloon.speed;
+                balloon.group.position.y += Math.sin(time * 2 + balloon.floatOffset) * 0.02;
+                balloon.group.rotation.y = Math.sin(time + balloon.floatOffset) * 0.1;
+                if (balloon.group.position.z > 20) {
+                    balloon.group.position.z = -120;
+                    balloon.group.position.x = Math.random() * 120 - 60;
+                    balloon.group.position.y = Math.random() * 30 + 5;
+                }
+            });
+            
+            // 飞机飞行
+            planes.forEach(plane => {
+                plane.group.position.x += plane.speed * plane.direction;
+                // 更自然的上下起伏
+                plane.group.position.y += Math.sin(time * 2 + plane.wobble) * 0.04;
+                // 轻微的倾斜摇摆
+                plane.group.rotation.z = Math.sin(time * 3 + plane.wobble) * 0.05;
+                plane.group.rotation.x = Math.sin(time * 2.5 + plane.wobble) * 0.03;
+                
+                if (Math.abs(plane.group.position.x) > 70) {
+                    plane.group.position.x = -70 * plane.direction;
+                    plane.group.position.z = Math.random() * -80 - 40;
+                    plane.group.position.y = Math.random() * 10 + 8;
+                }
+            });
+            
+            // 粒子轻微旋转
+            particlesMesh.rotation.y += 0.0003;
+            
+            // 相机轻微上下浮动
+            camera.position.y = Math.sin(time * 0.5) * 0.3;
+            
+            renderer.render(scene, camera);
+        }
+        
+        animate();
+        
+        // 响应窗口大小变化
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+    </script>
+
+    <script type="text/babel">
+        console.log('🚀 开始执行 React 代码:', new Date().toISOString());
+        const { useState, useEffect, useRef } = React;
+
+        // 配置 marked
+        if (typeof marked !== 'undefined') {
+            marked.setOptions({
+                breaks: true,
+                gfm: true
+            });
+        }
+
+        // 生成 UUID v4
+        function generateUUID() {
+            return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                const r = Math.random() * 16 | 0;
+                const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                return v.toString(16);
+            });
+        }
+
+        function ChatApp() {
+            const [sessionId] = useState(() => generateUUID());
+            const [messages, setMessages] = useState([]);
+            const [inputText, setInputText] = useState('');
+            const [isLoading, setIsLoading] = useState(false);
+            const [currentPlan, setCurrentPlan] = useState(null);
+            const [isAutoScroll, setIsAutoScroll] = useState(true);
+            const [deepSearch, setDeepSearch] = useState(false);
+            const [expandedToolUseIds, setExpandedToolUseIds] = useState(new Set()); // 跟踪展开的 tool_use
+            const [skills, setSkills] = useState([]); // 可用技能列表
+            const [showSkillSuggestions, setShowSkillSuggestions] = useState(false); // 是否显示技能提示
+            const [selectedSkillIndex, setSelectedSkillIndex] = useState(0); // 当前选中的技能索引
+            const messagesEndRef = useRef(null);
+            const messagesContainerRef = useRef(null);
+            const inputRef = useRef(null); // 输入框引用
+            const userScrolledRef = useRef(false); // 跟踪用户是否主动滚动
+            const isAutoScrollingRef = useRef(false); // 跟踪是否正在自动滚动
+
+            // 加载技能列表
+            useEffect(() => {
+                const fetchSkills = async () => {
+                    try {
+                        console.log('开始获取技能列表...');
+                        const response = await fetch('/get_skills');
+                        console.log('技能接口响应状态:', response.status);
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('技能接口返回数据:', data);
+                            // 处理不同的返回格式
+                            let skillsList = [];
+                            if (Array.isArray(data)) {
+                                skillsList = data;
+                            } else if (data.skills && Array.isArray(data.skills)) {
+                                skillsList = data.skills;
+                            } else if (typeof data === 'object') {
+                                // 如果是对象，尝试提取技能列表
+                                skillsList = Object.values(data);
+                            }
+                            setSkills(skillsList);
+                            console.log('已加载技能列表:', skillsList);
+                        } else {
+                            console.error('获取技能列表失败，状态码:', response.status);
+                        }
+                    } catch (error) {
+                        console.error('加载技能列表失败:', error);
+                    }
+                };
+                fetchSkills();
+            }, []);
+
+            // 监听输入变化，显示/隐藏技能提示
+            useEffect(() => {
+                // 只要输入框内容包含 / 就显示提示（可以在任何位置）
+                const slashIndex = inputText.indexOf('/');
+                if (slashIndex !== -1) {
+                    // 提取 / 后的查询文本
+                    const query = inputText.substring(slashIndex + 1).toLowerCase().trim();
+                    if (skills.length === 0) {
+                        setShowSkillSuggestions(false);
+                    } else if (query === '') {
+                        // 显示所有技能
+                        setShowSkillSuggestions(true);
+                    } else {
+                        // 根据输入过滤技能
+                        const filteredSkills = skills.filter(skill => {
+                            const skillName = skill.name || '';
+                            const skillDesc = skill.description || '';
+                            return skillName.toLowerCase().includes(query) || 
+                                   skillDesc.toLowerCase().includes(query);
+                        });
+                        setShowSkillSuggestions(filteredSkills.length > 0);
+                    }
+                    setSelectedSkillIndex(0);
+                } else {
+                    setShowSkillSuggestions(false);
+                }
+            }, [inputText, skills]);
+
+            // 渲染 Plan 组件
+            const renderPlan = (plan) => {
+                if (!plan) return null;
+
+                const getStateIcon = (state) => {
+                    switch (state) {
+                        case 'done':
+                            return '✓';
+                        case 'in_progress':
+                            return '⟳';
+                        case 'abandoned':
+                            return '✗';
+                        case 'todo':
+                        default:
+                            return '○';
+                    }
+                };
+
+                const getStateText = (state) => {
+                    switch (state) {
+                        case 'done':
+                            return '已完成';
+                        case 'in_progress':
+                            return '进行中';
+                        case 'abandoned':
+                            return '已放弃';
+                        case 'todo':
+                        default:
+                            return '待处理';
+                    }
+                };
+
+                return (
+                    <div className="plan-bubble">
+                        <strong>📋 {plan.name || '计划'}</strong>
+                        {plan.description && (
+                            <div className="plan-description">
+                                {plan.description}
+                            </div>
+                        )}
+                        {plan.subtasks && plan.subtasks.length > 0 && (
+                            <div className="plan-subtasks">
+                                {plan.subtasks.map((subtask, idx) => (
+                                    <div key={idx} className="subtask-item">
+                                        <div className="subtask-state" title={getStateText(subtask.state)}>
+                                            {getStateIcon(subtask.state)}
+                                        </div>
+                                        <div className="subtask-content">
+                                            <div className="subtask-name">
+                                                {subtask.name}
+                                            </div>
+                                            {subtask.description && (
+                                                <div className="subtask-description">
+                                                    {subtask.description}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            };
+
+            const scrollToBottom = () => {
+                if (messagesEndRef.current) {
+                    isAutoScrollingRef.current = true;
+                    messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+                    // 滚动动画大约需要300-500ms，给足够时间避免误判
+                    setTimeout(() => {
+                        isAutoScrollingRef.current = false;
+                    }, 600);
+                }
+            };
+
+            // 流式返回过程中自动滚动
+            useEffect(() => {
+                if (!userScrolledRef.current) {
+                    const timer = setTimeout(() => {
+                        scrollToBottom();
+                    }, 50);
+                    return () => clearTimeout(timer);
+                }
+            }, [messages, currentPlan]);
+
+            const handleScroll = () => {
+                const container = messagesContainerRef.current;
+                if (!container) return;
+                
+                // 如果是自动滚动触发的，忽略
+                if (isAutoScrollingRef.current) return;
+                
+                const { scrollTop, scrollHeight, clientHeight } = container;
+                const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+                
+                // 如果距离底部超过100px，认为用户主动向上滚动
+                if (distanceToBottom > 100) {
+                    userScrolledRef.current = true;
+                    console.log('用户向上滚动，停止自动跟随');
+                }
+            };
+
+            const stopGeneration = async () => {
+                try {
+                    const response = await fetch(`/stop?session_id=${encodeURIComponent(sessionId)}`);
+                    if (response.ok) {
+                        console.log('已成功发送打断请求');
+                        setIsLoading(false);
+                    } else {
+                        console.error('打断请求失败:', response.status);
+                    }
+                } catch (error) {
+                    console.error('打断请求错误:', error);
+                }
+            };
+
+            const sendMessage = async () => {
+                if (!inputText.trim() || isLoading) return;
+
+                const userMessage = {
+                    role: 'user',
+                    content: inputText.trim()
+                };
+
+                // 在添加消息之前重置滚动状态
+                userScrolledRef.current = false;
+                console.log('开始新对话，重置滚动状态');
+
+                setMessages(prev => [
+                    ...prev,
+                    userMessage,
+                    // 立即添加一个空的助手消息用于显示加载动画
+                    {
+                        role: 'assistant',
+                        contents: []
+                    }
+                ]);
+                setInputText('');
+                setIsLoading(true);
+
+                try {
+                    const response = await fetch(
+                        `/chat?session_id=${encodeURIComponent(sessionId)}&query=${encodeURIComponent(userMessage.content)}&deepresearch=${deepSearch}`
+                    );
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+                    
+                    // 用 Map 存储每个 msg_id 对应的 block（每个 block 是一个 contents 数组）
+                    let messageBlocks = new Map();
+                    // 消息 ID 的顺序列表
+                    let messageIdOrder = [];
+                    
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        
+                        if (done) break;
+                        
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n\n');
+                        buffer = lines.pop() || '';
+                        
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                try {
+                                    const data = JSON.parse(line.slice(6));
+                                    const msgId = data.msg_id || 'unknown';
+                                    
+                                    // 调试日志
+                                    if (data.plan) {
+                                        console.log('Received plan:', data.plan);
+                                    }
+                                    
+                                    // 更新 plan 信息（如果为空则清除）
+                                    if (data.plan !== undefined) {
+                                        setCurrentPlan(data.plan || null);
+                                    }
+                                    
+                                    // 如果是新的 msg_id，记录顺序
+                                    if (!messageBlocks.has(msgId)) {
+                                        messageIdOrder.push(msgId);
+                                    }
+                                    
+                                    // 用当前 SSE 消息的 contents 覆盖该 msg_id 的 block
+                                    messageBlocks.set(msgId, data.contents || []);
+                                    
+                                    // 更新消息显示
+                                    setMessages(prev => {
+                                        const newMessages = [...prev];
+                                        const lastMsg = newMessages[newMessages.length - 1];
+                                        
+                                        // 按照 msg_id 顺序组合所有 block 的 contents
+                                        const allContents = [];
+                                        for (const id of messageIdOrder) {
+                                            const blockContents = messageBlocks.get(id);
+                                            if (blockContents && blockContents.length > 0) {
+                                                allContents.push(...blockContents);
+                                            }
+                                        }
+                                        
+                                        if (lastMsg && lastMsg.role === 'assistant') {
+                                            // 更新最后一条助手消息
+                                            newMessages[newMessages.length - 1] = {
+                                                role: 'assistant',
+                                                contents: allContents
+                                            };
+                                        } else {
+                                            // 添加新的助手消息
+                                            newMessages.push({
+                                                role: 'assistant',
+                                                contents: allContents
+                                            });
+                                        }
+                                        return newMessages;
+                                    });
+                                    
+                                } catch (e) {
+                                    console.error('Failed to parse SSE data:', e);
+                                }
+                            }
+                        }
+                    }
+                } catch (error) {
+                    console.error('Error sending message:', error);
+                    setMessages(prev => [...prev, {
+                        role: 'assistant',
+                        contents: [{
+                            type: 'error',
+                            content: `错误: ${error.message}`
+                        }]
+                    }]);
+                } finally {
+                    setIsLoading(false);
+                    // 回答结束后聚焦到输入框
+                    setTimeout(() => {
+                        if (inputRef.current) {
+                            inputRef.current.focus();
+                        }
+                    }, 100);
+                }
+            };
+
+            const handleKeyPress = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    // 如果正在显示技能提示，选择当前技能
+                    if (showSkillSuggestions) {
+                        selectSkill(selectedSkillIndex);
+                    } else {
+                        sendMessage();
+                    }
+                } else if (e.key === 'ArrowDown' && showSkillSuggestions) {
+                    e.preventDefault();
+                    const filteredSkills = getFilteredSkills();
+                    setSelectedSkillIndex(prev => 
+                        prev < filteredSkills.length - 1 ? prev + 1 : prev
+                    );
+                } else if (e.key === 'ArrowUp' && showSkillSuggestions) {
+                    e.preventDefault();
+                    setSelectedSkillIndex(prev => prev > 0 ? prev - 1 : 0);
+                } else if (e.key === 'Escape' && showSkillSuggestions) {
+                    e.preventDefault();
+                    setShowSkillSuggestions(false);
+                }
+            };
+
+            // 获取过滤后的技能列表
+            const getFilteredSkills = () => {
+                const slashIndex = inputText.indexOf('/');
+                if (slashIndex === -1) return [];
+                const query = inputText.substring(slashIndex + 1).toLowerCase().trim();
+                if (query === '') return skills;
+                return skills.filter(skill => {
+                    const skillName = skill.name || '';
+                    const skillDesc = skill.description || '';
+                    return skillName.toLowerCase().includes(query) || 
+                           skillDesc.toLowerCase().includes(query);
+                });
+            };
+
+            // 选择技能
+            const selectSkill = (index) => {
+                const filteredSkills = getFilteredSkills();
+                if (index >= 0 && index < filteredSkills.length) {
+                    const skill = filteredSkills[index];
+                    const slashIndex = inputText.indexOf('/');
+                    // 保留 / 之前的内容，替换成技能名
+                    const beforeSlash = slashIndex > 0 ? inputText.substring(0, slashIndex) : '';
+                    setInputText(`${beforeSlash}/${skill.name} `);
+                    setShowSkillSuggestions(false);
+                    // 设置光标到末尾
+                    setTimeout(() => {
+                        if (inputRef.current) {
+                            inputRef.current.focus();
+                            inputRef.current.setSelectionRange(
+                                inputRef.current.value.length,
+                                inputRef.current.value.length
+                            );
+                        }
+                    }, 0);
+                }
+            };
+
+            // 切换 tool_use 的展开/折叠状态
+            const toggleToolUse = (toolUseId) => {
+                setExpandedToolUseIds(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(toolUseId)) {
+                        newSet.delete(toolUseId);
+                    } else {
+                        newSet.add(toolUseId);
+                    }
+                    return newSet;
+                });
+            };
+
+            // 查找指定 tool_use_id 对应的 tool_result
+            const findToolResult = (toolUseId) => {
+                for (const msg of messages) {
+                    if (msg.role === 'assistant' && msg.contents) {
+                        const toolResult = msg.contents.find(
+                            item => item.type === 'tool_result' && item.tool_use_id === toolUseId
+                        );
+                        if (toolResult) return toolResult;
+                    }
+                }
+                return null;
+            };
+
+            return (
+                <>
+                    <div className="chat-container">
+                        <div className="chat-header">
+                            <div className="chat-header-left">
+                                <h1>AgentScope -- Alibaba</h1>
+                                <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '4px' }}>
+                                    Session: {sessionId}
+                                </div>
+                            </div>
+                            <button className="new-chat-button" onClick={() => window.location.reload()}>
+                                + 新建对话
+                            </button>
+                        </div>
+                        
+                        <div className="chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
+                        {messages.map((message, index) => (
+                            <div key={index} className={`message ${message.role}`}>
+                                <div className="message-bubble">
+                                    {message.role === 'user' ? (
+                                        <div>{message.content}</div>
+                                    ) : (
+                                        <div>
+                                            {message.contents.map((item, idx) => {
+                                                // tool_result 不直接渲染，会在 tool_use 下方展示
+                                                if (item.type === 'tool_result') {
+                                                    return null;
+                                                }
+                                                
+                                                // 对 text 类型使用 markdown 渲染
+                                                if (item.type === 'text' && typeof marked !== 'undefined') {
+                                                    return (
+                                                        <div 
+                                                            key={idx} 
+                                                            className={`message-content-item ${item.type} markdown-content`}
+                                                            dangerouslySetInnerHTML={{ __html: marked.parse(item.content || '') }}
+                                                        />
+                                                    );
+                                                }
+                                                
+                                                // tool_use 类型：可点击展开/折叠，展示对应的 tool_result
+                                                if (item.type === 'tool_use') {
+                                                    const toolUseId = item.tool_use_id;
+                                                    const isExpanded = expandedToolUseIds.has(toolUseId);
+                                                    const toolResult = findToolResult(toolUseId);
+                                                    // 检查是否是最后一条消息且正在加载
+                                                    const isLastMessage = index === messages.length - 1;
+                                                    const showLoading = !toolResult && isLastMessage && isLoading;
+                                                    
+                                                    return (
+                                                        <div key={idx}>
+                                                            <div 
+                                                                className={`message-content-item ${item.type} ${showLoading ? 'loading' : ''}`}
+                                                                onClick={() => toggleToolUse(toolUseId)}
+                                                            >
+                                                                <div className="tool-use-header">
+                                                                    <span className={`tool-use-toggle ${isExpanded ? 'expanded' : ''}`}>
+                                                                        ▶
+                                                                    </span>
+                                                                    <span>{item.content}</span>
+                                                                </div>
+                                                            </div>
+                                                            {isExpanded && toolResult && (
+                                                                <div className="message-content-item tool_result">
+                                                                    {toolResult.content}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                }
+                                                
+                                                // 其他类型保持原样
+                                                return (
+                                                    <div key={idx} className={`message-content-item ${item.type}`}>
+                                                        {item.content}
+                                                    </div>
+                                                );
+                                            })}
+                                            {index === messages.length - 1 && isLoading && (
+                                                <div style={{ marginTop: '8px' }}>
+                                                    <span className="loading-indicator"></span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        ))}
+                        <div ref={messagesEndRef} />
+                    </div>
+                    
+                    <div className="chat-input-container">
+                        {showSkillSuggestions && (
+                            <div className="skill-suggestions">
+                                {getFilteredSkills().length > 0 ? (
+                                    getFilteredSkills().map((skill, index) => (
+                                        <div 
+                                            key={skill.name}
+                                            className={`skill-item ${index === selectedSkillIndex ? 'selected' : ''}`}
+                                            onClick={() => selectSkill(index)}
+                                            onMouseEnter={() => setSelectedSkillIndex(index)}
+                                        >
+                                            <div className="skill-name">/{skill.name}</div>
+                                            {skill.description && (
+                                                <div className="skill-description">{skill.description}</div>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <div className="skill-suggestions-empty">没有找到匹配的技能</div>
+                                )}
+                            </div>
+                        )}
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            className="chat-input"
+                            placeholder="输入消息（输入 / 查看可用技能）..."
+                            value={inputText}
+                            onChange={(e) => setInputText(e.target.value)}
+                            onKeyDown={handleKeyPress}
+                            disabled={isLoading}
+                        />
+                        <div 
+                            className={`deep-search-toggle ${deepSearch ? 'active' : ''}`}
+                            onClick={() => setDeepSearch(!deepSearch)}
+                        >
+                            <span className="toggle-label">深度研究</span>
+                            <div className="toggle-switch"></div>
+                        </div>
+                        {isLoading ? (
+                            <button
+                                className="stop-button"
+                                onClick={stopGeneration}
+                            >
+                                <div className="stop-icon"></div>
+                                打断
+                            </button>
+                        ) : (
+                            <button
+                                className="send-button"
+                                onClick={sendMessage}
+                                disabled={!inputText.trim()}
+                            >
+                                发送
+                            </button>
+                        )}
+                    </div>
+                </div>
+                
+                {currentPlan && renderPlan(currentPlan)}
+            </>
+            );
+        }
+
+        ReactDOM.render(<ChatApp />, document.getElementById('root'));
+        console.log('✅ React 渲染完成:', new Date().toISOString());
+    </script>
+</body>
+</html>
