@@ -155,7 +155,6 @@ class VLTokenCounter(TokenCounterBase):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-
     async def count(self, messages: List[dict], **kwargs) -> int:
         total_tokens = 0
         
@@ -287,7 +286,7 @@ async def build_subagent_tool():
             subagent=ReActAgent(
                 name="Owen",
                 sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=""),
-                model=OpenAIChatModel(
+                model=OpenAIChatModelCacahed(
                     model_name="qwen3.5-plus",
                     api_key=os.environ["DASHSCOPE_API_KEY"],
                     stream=True,
@@ -419,7 +418,7 @@ async def chat(request: ChatRequest):
     agent=ReActAgent(
         name="Owen",
         sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=extra_sys_prompt),
-        model=OpenAIChatModel(
+        model=OpenAIChatModelCacahed(
             model_name="qwen3.5-plus",
             api_key=os.environ["DASHSCOPE_API_KEY"],
             stream=True,

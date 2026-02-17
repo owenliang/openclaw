@@ -1,3 +1,4 @@
 agentscope
 fastapi
 uvicorn
+pillow
