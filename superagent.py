@@ -6,13 +6,13 @@ from contextlib import asynccontextmanager
 from agentscope.tool import Toolkit
 from agentscope.mcp import HttpStatelessClient
 from agentscope.agent import ReActAgent
-from agentscope.formatter import DashScopeChatFormatter, OpenAIChatFormatter
+from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
-from agentscope.message import Msg,TextBlock
+from agentscope.message import ImageBlock, Msg,TextBlock
 from agentscope.tool import ToolResponse
 from agentscope.model import OpenAIChatModel,DashScopeChatModel
 from agentscope.tool import view_text_file,write_text_file,insert_text_file,execute_shell_command
-from agentscope.token import CharTokenCounter
+from agentscope.token import TokenCounterBase
 from agentscope.session import JSONSession
 from agentscope.pipeline import stream_printing_messages
 from agentscope.plan import PlanNotebook
@@ -26,7 +26,11 @@ import os
 import sys
 import asyncio
 from datetime import datetime
-from collections import OrderedDict
+from typing import List
+from pydantic import BaseModel
+from PIL import Image
+import io
+import base64
 
 FLAGS = {
     "enable_browser_mcp": False, # 是否启用浏览器MCP
@@ -147,6 +151,34 @@ async def get_skills():
     skills_list = list(toolkit.skills.values())
     return {"skills": skills_list}
 
+class VLTokenCounter(TokenCounterBase):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+
+    async def count(self, messages: List[dict], **kwargs) -> int:
+        total_tokens = 0
+        
+        for message in messages:
+            content = message.get("content", "")
+            if isinstance(content, str):
+                total_tokens += int(len(content) / 1.5)
+            elif isinstance(content, list):
+                for item in content:
+                    item_type = item['type']
+                    if item_type == "text":
+                        text = item['text']
+                        total_tokens += int(len(text) / 1.5)
+                    elif item_type == "image_url":
+                        url = item['image_url']['url']
+                        if url.startswith("data:image"):
+                            base64_data = url.split(",")[1]
+                            image_bytes = base64.b64decode(base64_data)
+                            image = Image.open(io.BytesIO(image_bytes))
+                            width, height = image.size
+                            total_tokens += int((width * height) / (32 * 32))
+        return total_tokens
+
 class OpenAIChatModelCacahed(OpenAIChatModel): 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -157,8 +189,7 @@ class OpenAIChatModelCacahed(OpenAIChatModel):
             msg['content']=[{'type':'text','text':msg['content'], "cache_control": {"type": "ephemeral"}}]
         else:
             msg['content'][-1]['cache_control']= {"type": "ephemeral"}
-        ret= await super().__call__(messages, *args, **kwargs)
-        return ret
+        return await super().__call__(messages, *args, **kwargs)
 
 async def web_search(query: str) -> ToolResponse:
     '''
@@ -256,8 +287,8 @@ async def build_subagent_tool():
             subagent=ReActAgent(
                 name="Owen",
                 sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=""),
-                model=OpenAIChatModelCacahed(
-                    model_name="qwen3-max",
+                model=OpenAIChatModel(
+                    model_name="qwen3.5-plus",
                     api_key=os.environ["DASHSCOPE_API_KEY"],
                     stream=True,
                     client_kwargs={
@@ -280,8 +311,8 @@ async def build_subagent_tool():
                 memory=InMemoryMemory(),
                 compression_config=ReActAgent.CompressionConfig(
                     enable=True,
-                    agent_token_counter=CharTokenCounter(),
-                    trigger_threshold=200000,
+                    agent_token_counter=VLTokenCounter(),
+                    trigger_threshold=600000,
                     keep_recent=5,
                     compression_model=DashScopeChatModel(
                         model_name="qwen-flash",
@@ -364,8 +395,15 @@ async def register_mcp_keepalive(agent,mcp_session):
 mcp_mgr=StatefulMCPManager()
 sess_ctx={}
 
-@app.get("/chat")
-async def chat(session_id: str, query: str, deepresearch: bool = False):
+class ChatRequest(BaseModel):
+    session_id: str
+    content: List[TextBlock|ImageBlock]
+    deepresearch: bool = False
+
+@app.post("/chat")
+async def chat(request: ChatRequest):
+    session_id=request.session_id
+
     mcp_session=await mcp_mgr.get_or_create_session(session_id)# Stateful MCP
     toolkit=await build_agent_toolkit(mcp_session)
 
@@ -376,13 +414,13 @@ async def chat(session_id: str, query: str, deepresearch: bool = False):
     extra_sys_prompt='\n'.join(extra_sys_prompt)
 
     plan_notebook=None
-    if deepresearch:
+    if request.deepresearch:
         plan_notebook=PlanNotebook()
     agent=ReActAgent(
         name="Owen",
         sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=extra_sys_prompt),
-        model=OpenAIChatModelCacahed(
-            model_name="qwen3-max",
+        model=OpenAIChatModel(
+            model_name="qwen3.5-plus",
             api_key=os.environ["DASHSCOPE_API_KEY"],
             stream=True,
             client_kwargs={
@@ -396,7 +434,6 @@ async def chat(session_id: str, query: str, deepresearch: bool = False):
                         'enable_search_extension': True,
                         'forced_search': True,
                     },
-                    'enable_text_image_mixed': True
                 }
             }
         ),
@@ -407,8 +444,8 @@ async def chat(session_id: str, query: str, deepresearch: bool = False):
         memory=InMemoryMemory(),
         compression_config=ReActAgent.CompressionConfig(
             enable=True,
-            agent_token_counter=CharTokenCounter(),
-            trigger_threshold=200000,
+            agent_token_counter=VLTokenCounter(),
+            trigger_threshold=600000,
             keep_recent=5,
             compression_model=DashScopeChatModel(
                 model_name="qwen-flash",
@@ -428,7 +465,7 @@ async def chat(session_id: str, query: str, deepresearch: bool = False):
 
     inputs = Msg(
         name="user",
-        content=query,
+        content=request.content,
         role="user",
     )
 
@@ -451,7 +488,7 @@ async def chat(session_id: str, query: str, deepresearch: bool = False):
         except asyncio.CancelledError as e:
             await q.put(f"data: {json.dumps({'msg_id': None,'last': True,'contents':[],'plan':None, 'cancel':True}, ensure_ascii=False)}\n\n")
         except Exception as e:
-            await q.put(f"data: {json.dumps({'msg_id': None,'last': True,'contents':[],'plan':None, 'error':e}, ensure_ascii=False)}\n\n")
+            await q.put(f"data: {json.dumps({'msg_id': None,'last': True,'contents':[],'plan':None, 'error':str(e)}, ensure_ascii=False)}\n\n")
         finally:
             await q.put(None)
     
