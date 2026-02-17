@@ -314,11 +314,13 @@ async def build_subagent_tool():
                     agent_token_counter=VLTokenCounter(),
                     trigger_threshold=600000,
                     keep_recent=5,
-                    compression_model=DashScopeChatModel(
-                        model_name="qwen-flash",
+                    compression_model=OpenAIChatModel(
+                        model_name="qwen3.5-plus",
                         api_key=os.environ["DASHSCOPE_API_KEY"],
                         stream=False,
-                        enable_thinking=False,
+                        client_kwargs={
+                            'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        }
                     ),
                 ),
                 max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
@@ -447,11 +449,13 @@ async def chat(request: ChatRequest):
             agent_token_counter=VLTokenCounter(),
             trigger_threshold=600000,
             keep_recent=5,
-            compression_model=DashScopeChatModel(
-                model_name="qwen-flash",
+            compression_model=OpenAIChatModel(
+                model_name="qwen3.5-plus",
                 api_key=os.environ["DASHSCOPE_API_KEY"],
                 stream=False,
-                enable_thinking=False,
+                client_kwargs={
+                    'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                }
             ),
         ),
         max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
