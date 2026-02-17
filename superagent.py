@@ -34,7 +34,7 @@ import base64
 
 FLAGS = {
     "enable_browser_mcp": False, # 是否启用浏览器MCP
-    "enable_bazi_mcp": False, # 是否启用八字算命MCP
+    "enable_bazi_mcp": True, # 是否启用八字算命MCP
     "enable_websearch": True, # 是否启用网页搜索TOOL
     "enable_view_text_file": True, # 是否启用查看文本文件TOOL
     "enable_write_text_file": True, # 是否启用写入文本文件TOOL
@@ -269,7 +269,8 @@ async def build_agent_toolkit(mcp_session):
     # Stateful MCP
     if FLAGS["enable_browser_mcp"]:
         browser_mcp_client=await mcp_session.ensure_mcp_client("Browser-MCP","streamable_http","https://1267341675397299.agentrun-data.cn-hangzhou.aliyuncs.com/templates/sandbox-browser-p918At/mcp",headers={"X-API-Key": f"Bearer {os.environ.get('AGENTRUN_BROWSER_API_KEY', '')}"})
-        await toolkit.register_mcp_client(browser_mcp_client.client)
+        if browser_mcp_client:
+            await toolkit.register_mcp_client(browser_mcp_client.client)
     # Stateless MCP
     if FLAGS["enable_bazi_mcp"]:
         await toolkit.register_mcp_client(HttpStatelessClient("Bazi-MCP","sse","https://mcp.api-inference.modelscope.net/cf651826916d46/sse"))

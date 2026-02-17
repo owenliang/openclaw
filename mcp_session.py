@@ -39,9 +39,9 @@ class Session:
                     await mcp.client.list_tools()  # 健康检查
                     return mcp
                 except Exception:
-                    await mcp.close()
+                    mcp.close()
                     del self.mcp_map[name]
-                return None
+                # 构建新的MCP连接
             try:
                 q = asyncio.Queue()
 
