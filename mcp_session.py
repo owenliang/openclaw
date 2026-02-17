@@ -36,15 +36,13 @@ class Session:
             if name in self.mcp_map:
                 mcp = self.mcp_map[name]
                 try:
-                    await mcp.client.list_tools()  # 健康检查
+                    await mcp.client.send_ping()  # 健康检查
                     return mcp
                 except Exception:
                     mcp.close()
                     del self.mcp_map[name]
-                # 构建新的MCP连接
             try:
                 q = asyncio.Queue()
-
                 async def mcp_lifecycle():
                     try:
                         client = HttpStatefulClient(name, transport, url, **kwargs)
@@ -56,9 +54,8 @@ class Session:
                         except Exception:
                             pass
                     except BaseException as e:
-                        print(f"Error creating MCP client({name} {url}): {e}")
+                        print(f"MCP LifeCycle Error: ({name} {url}): {e}")
                         await q.put(None)
-
                 asyncio.create_task(mcp_lifecycle())
                 mcp = await q.get()
                 if mcp is None:
@@ -74,7 +71,7 @@ class Session:
                 return
             mcp = self.mcp_map[name]
             try:
-                await mcp.close()
+                mcp.close()
             except Exception:
                 pass
             del self.mcp_map[name]
@@ -83,7 +80,7 @@ class Session:
         async with self.lock:
             for mcp in self.mcp_map.values():
                 try:
-                    await mcp.close()
+                    mcp.close()
                 except Exception:
                     pass
             self.mcp_map = {}
