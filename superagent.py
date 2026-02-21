@@ -183,7 +183,7 @@ class VLTokenCounter(TokenCounterBase):
                             total_tokens += int((width * height) / (32 * 32))
         return total_tokens
 
-class OpenAIChatModelCacahed(OpenAIChatModel): 
+class OpenAIChatModelCached(OpenAIChatModel): 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -284,14 +284,14 @@ async def build_agent_toolkit(sess: Session):
 
 async def build_subagent_tool():
     async def subagent_tool(task: str) -> ToolResponse:
+        sess=sess_mgr.temp_session()
         try:
-            sess=sess_mgr.temp_session()
             toolkit=await build_agent_toolkit(sess)
 
             subagent=ReActAgent(
                 name="Owen",
                 sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=""),
-                model=OpenAIChatModelCacahed(
+                model=OpenAIChatModelCached(
                     model_name="qwen3.5-plus",
                     api_key=os.environ["DASHSCOPE_API_KEY"],
                     stream=True,
@@ -422,7 +422,7 @@ async def chat(request: ChatRequest):
     agent=ReActAgent(
         name="Owen",
         sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=extra_sys_prompt),
-        model=OpenAIChatModelCacahed(
+        model=OpenAIChatModelCached(
             model_name="qwen3.5-plus",
             api_key=os.environ["DASHSCOPE_API_KEY"],
             stream=True,
