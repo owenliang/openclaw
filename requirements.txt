@@ -2,3 +2,4 @@ agentscope
 fastapi
 uvicorn
 pillow
+agentscope-runtime

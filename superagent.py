@@ -2,6 +2,7 @@
 Author: OwenLiang
 Date: 2026-02
 '''
+import uuid
 from contextlib import asynccontextmanager
 from agentscope.tool import Toolkit
 from agentscope.mcp import HttpStatelessClient
@@ -16,7 +17,7 @@ from agentscope.token import TokenCounterBase
 from agentscope.session import JSONSession
 from agentscope.pipeline import stream_printing_messages
 from agentscope.plan import PlanNotebook
-from mcp_session import Session, StatefulMCPManager
+from session import Session, GlobalSessionManager
 import fastapi
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from fastapi import Request
@@ -33,7 +34,8 @@ import io
 import base64
 
 FLAGS = {
-    "enable_browser_mcp": False, # 是否启用浏览器MCP
+    "enable_agentrun_browser_mcp": True, # 是否启用浏览器MCP（远端agentrun mcp）
+    "enable_sandbox": False, # 是否启用沙箱(只支持browser，底层是docker拉起mcp server) --- 需要Linux/Mac安装Docker
     "enable_bazi_mcp": True, # 是否启用八字算命MCP
     "enable_websearch": True, # 是否启用网页搜索TOOL
     "enable_view_text_file": True, # 是否启用查看文本文件TOOL
@@ -42,7 +44,6 @@ FLAGS = {
     "enable_execute_shell_command": True, # 是否启用执行Shell命令TOOL
     "enable_subagent": True, # 是否启用子代理
 }
-
 
 # Agent系统提示词模板
 AGENT_SYS_PROMPT = """你是超级助理Owen，一个高效、智能的AI助手，使用中文与用户交流。
@@ -100,10 +101,14 @@ SUBAGENT_PROMPT = """
 - 主agent需要对subagent输出进行验证和整合
 """
 
+sess_mgr=GlobalSessionManager(expires=600, enable_sandbox=FLAGS["enable_sandbox"])
+sess_ctx={}
+
 @asynccontextmanager
 async def lifespan(app):
-    os.makedirs(".agents/skills/",exist_ok=True)
-    yield
+    async with sess_mgr:
+        os.makedirs(".agents/skills/",exist_ok=True)
+        yield
 
 app=fastapi.FastAPI(lifespan=lifespan)
 app.add_middleware(# 添加 CORS 中间件
@@ -236,7 +241,7 @@ async def web_search(query: str) -> ToolResponse:
             ],
         )
 
-async def build_agent_toolkit(mcp_session):
+async def build_agent_toolkit(sess: Session):
     toolkit = Toolkit(
         agent_skill_instruction=f'''# Skills 使用指南
         你拥有若干预定义的技能（skill），每个技能都是一套完整的SOP流程，存放在独立目录中。
@@ -250,7 +255,6 @@ async def build_agent_toolkit(mcp_session):
         - ⚠️ Skill不是tool：skill是流程指南，不能直接作为tool调用
         - ✅ Tool是执行单元：skill内部需要通过调用tool来完成具体操作
         - 📁 文件结构：每个skill都有独立目录，包含SKILL.md和相关依赖文件
-        
         ''',
         agent_skill_template="- name: {name}  dir: {dir}  desc: {description}")
     # skills
@@ -267,10 +271,10 @@ async def build_agent_toolkit(mcp_session):
     if FLAGS["enable_execute_shell_command"]:
         toolkit.register_tool_function(execute_shell_command)
     # Stateful MCP
-    if FLAGS["enable_browser_mcp"]:
-        browser_mcp_client=await mcp_session.ensure_mcp_client("Browser-MCP","streamable_http","https://1267341675397299.agentrun-data.cn-hangzhou.aliyuncs.com/templates/sandbox-browser-p918At/mcp",headers={"X-API-Key": f"Bearer {os.environ.get('AGENTRUN_BROWSER_API_KEY', '')}"})
-        if browser_mcp_client:
-            await toolkit.register_mcp_client(browser_mcp_client.client)
+    if FLAGS["enable_agentrun_browser_mcp"]:
+        await sess.register_stateful_mcp(toolkit,type="http",name="Browser-MCP",transport="streamable_http",url="https://1267341675397299.agentrun-data.cn-hangzhou.aliyuncs.com/templates/sandbox-browser-p918At/mcp",headers={"X-API-Key": f"Bearer {os.environ.get('AGENTRUN_BROWSER_API_KEY', '')}"})
+    if FLAGS["enable_sandbox"]:
+        await sess.register_sandbox(toolkit)
     # Stateless MCP
     if FLAGS["enable_bazi_mcp"]:
         await toolkit.register_mcp_client(HttpStatelessClient("Bazi-MCP","sse","https://mcp.api-inference.modelscope.net/cf651826916d46/sse"))
@@ -281,8 +285,8 @@ async def build_agent_toolkit(mcp_session):
 async def build_subagent_tool():
     async def subagent_tool(task: str) -> ToolResponse:
         try:
-            mcp_session=Session(None)
-            toolkit=await build_agent_toolkit(mcp_session)
+            sess=sess_mgr.temp_session()
+            toolkit=await build_agent_toolkit(sess)
 
             subagent=ReActAgent(
                 name="Owen",
@@ -326,7 +330,7 @@ async def build_subagent_tool():
                 max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
             )
             subagent.set_console_output_enabled(False)
-            await register_mcp_keepalive(subagent,mcp_session)
+            await register_sess_keepalive(subagent,sess)
             await register_reasoning_hint(subagent)
 
             inputs = Msg(
@@ -353,7 +357,7 @@ async def build_subagent_tool():
                 ],
             )
         finally:
-            await mcp_session.reset_all_mcp_client()
+            await sess.release()
 
     docstr = f"""Execute a complex task independently.
     
@@ -362,11 +366,12 @@ async def build_subagent_tool():
     tools and resources.
 
     The sub-agent support the following abilities:
-    - FileSystem: 文件系统操作（只读）
+    - FileSystem: 文件系统操作
     {'- Shell: 执行shell命令' if FLAGS['enable_execute_shell_command'] else '' }
     {'- WebSearch: 联网搜索' if FLAGS['enable_websearch'] else '' }
-    {'- Browser: 操作浏览器' if FLAGS['enable_browser_mcp'] else ''}
+    {'- Browser: 远端浏览器' if FLAGS['enable_agentrun_browser_mcp'] else ''}
     {'- Bazi: 算八字' if FLAGS['enable_bazi_mcp'] else ''}
+    {'- Sandbox: 本地浏览器' if FLAGS['enable_sandbox'] else ''}
 
     Args:
         task (str):
@@ -387,15 +392,11 @@ async def register_reasoning_hint(agent):
     agent.register_instance_hook('pre_reasoning','add_reasoning_hint',add_reasoning_hint)
     agent.register_instance_hook('post_reasoning','remove_reasoning_hint',remove_reasoning_hint)
 
-# stateful mcp keepalive
-async def register_mcp_keepalive(agent,mcp_session):
-    async def activate_mcp_client(agent,kwargs,output=None):
-        await mcp_session.activate()
+async def register_sess_keepalive(agent,sess):
+    async def activate_sess_client(agent,kwargs,output=None):
+        await sess.activate()
     for hooks in ['pre_reasoning', 'pre_acting', 'post_acting', 'post_reasoning']:
-        agent.register_instance_hook(hooks,'activate_mcp_client',activate_mcp_client)
-
-mcp_mgr=StatefulMCPManager()
-sess_ctx={}
+        agent.register_instance_hook(hooks,'activate_sess_client',activate_sess_client)
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -406,8 +407,8 @@ class ChatRequest(BaseModel):
 async def chat(request: ChatRequest):
     session_id=request.session_id
 
-    mcp_session=await mcp_mgr.get_or_create_session(session_id)# Stateful MCP
-    toolkit=await build_agent_toolkit(mcp_session)
+    sess=await sess_mgr.get_or_create_session(session_id)# Stateful MCP
+    toolkit=await build_agent_toolkit(sess)
 
     extra_sys_prompt = []
     if FLAGS["enable_subagent"]:
@@ -464,7 +465,7 @@ async def chat(request: ChatRequest):
     await session.load_session_state(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
 
     agent.set_console_output_enabled(False)
-    await register_mcp_keepalive(agent,mcp_session)
+    await register_sess_keepalive(agent,sess)
     await register_reasoning_hint(agent)
 
     inputs = Msg(
