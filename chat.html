@@ -434,6 +434,13 @@
             transform: none;
         }
 
+        .deep-search-row {
+            display: flex;
+            gap: 8px;
+            padding: 0 20px;
+            margin-bottom: 8px;
+        }
+
         .deep-search-toggle {
             display: flex;
             align-items: center;
@@ -456,6 +463,12 @@
             background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
             color: white;
             border-color: #1890ff;
+        }
+
+        .deep-search-toggle.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            pointer-events: none;
         }
 
         .toggle-switch {
@@ -490,6 +503,74 @@
         .toggle-label {
             font-size: 14px;
             font-weight: 600;
+        }
+
+        .pending-request-banner {
+            position: absolute;
+            top: -50px;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%);
+            border: 1px solid #ffc53d;
+            border-radius: 8px;
+            padding: 10px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+        }
+
+        .pending-request-content {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .pending-label {
+            background: #ffc53d;
+            color: #fff;
+            font-size: 12px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .pending-text {
+            color: #333;
+            font-size: 14px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .pending-images-count {
+            font-size: 12px;
+            color: #666;
+            white-space: nowrap;
+        }
+
+        .cancel-pending-btn {
+            background: #ff4d4f;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .cancel-pending-btn:hover {
+            background: #ff7875;
         }
 
         .loading-indicator {
@@ -932,7 +1013,7 @@
         /* 打断按钮样式 */
         .stop-button {
             padding: 10px 24px;
-            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            background: linear-gradient(135deg, #d32f2f 0%, #f44336 100%);
             color: white;
             border: none;
             border-radius: 4px;
@@ -947,7 +1028,7 @@
 
         .stop-button:hover {
             opacity: 0.9;
-            box-shadow: 0 2px 8px rgba(24, 144, 255, 0.3);
+            box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
         }
 
         .stop-button:active {
@@ -1339,6 +1420,7 @@
             const [messages, setMessages] = useState([]);
             const [inputText, setInputText] = useState('');
             const [isLoading, setIsLoading] = useState(false);
+            const [isWaitingRequestId, setIsWaitingRequestId] = useState(false);
             const [currentPlan, setCurrentPlan] = useState(null);
             const [isAutoScroll, setIsAutoScroll] = useState(true);
             const [deepSearch, setDeepSearch] = useState(false);
@@ -1347,6 +1429,7 @@
             const [showSkillSuggestions, setShowSkillSuggestions] = useState(false); // 是否显示技能提示
             const [selectedSkillIndex, setSelectedSkillIndex] = useState(0); // 当前选中的技能索引
             const [selectedImages, setSelectedImages] = useState([]); // 选中的图片列表
+            const [pendingRequest, setPendingRequest] = useState(null); // 排队中的请求
             const messagesEndRef = useRef(null);
             const messagesContainerRef = useRef(null);
             const inputRef = useRef(null); // 输入框引用
@@ -1359,7 +1442,7 @@
                 const fetchSkills = async () => {
                     try {
                         console.log('开始获取技能列表...');
-                        const response = await fetch('/get_skills');
+                        const response = await fetch('/get_commands');
                         console.log('技能接口响应状态:', response.status);
                         if (response.ok) {
                             const data = await response.json();
@@ -1385,6 +1468,20 @@
                 };
                 fetchSkills();
             }, []);
+
+            // 监听 isLoading 变化，当回复完成且有排队请求时自动发送
+            useEffect(() => {
+                // 如果已打断，不发送排队请求
+                if (abortRef.current) return;
+                
+                if (!isLoading && pendingRequest) {
+                    const nextRequest = pendingRequest;
+                    // 清除排队状态
+                    setPendingRequest(null);
+                    // 直接发送排队请求，不经过输入框
+                    sendPendingMessage(nextRequest);
+                }
+            }, [isLoading, pendingRequest]);
 
             // 监听输入变化，显示/隐藏技能提示
             useEffect(() => {
@@ -1517,12 +1614,34 @@
                 }
             };
 
+            // 用于标记是否已打断，忽略后续消息
+            const abortRef = useRef(false);
+
+            const currentRequestIdRef = useRef(null);
+
             const stopGeneration = async () => {
+                if (!currentRequestIdRef.current) return;
                 try {
-                    const response = await fetch(`/stop?session_id=${encodeURIComponent(sessionId)}`);
+                    const response = await fetch(`/stop?session_id=${encodeURIComponent(sessionId)}&request_id=${encodeURIComponent(currentRequestIdRef.current)}`);
                     if (response.ok) {
                         console.log('已成功发送打断请求');
+                        abortRef.current = true;
                         setIsLoading(false);
+                        setIsWaitingRequestId(false);
+                        currentRequestIdRef.current = null;
+                        if (pendingRequest) {
+                            setPendingRequest(null);
+                        }
+                        setMessages(prev => {
+                            const newMessages = [...prev];
+                            const lastMsg = newMessages[newMessages.length - 1];
+                            if (lastMsg && lastMsg.role === 'assistant') {
+                                if (!lastMsg.contents || lastMsg.contents.length === 0) {
+                                    newMessages.pop();
+                                }
+                            }
+                            return newMessages;
+                        });
                     } else {
                         console.error('打断请求失败:', response.status);
                     }
@@ -1564,22 +1683,57 @@
                 setSelectedImages(prev => prev.filter(img => img.id !== imageId));
             };
 
+            // 从输入框发送消息
             const sendMessage = async () => {
-                if ((!inputText.trim() && selectedImages.length === 0) || isLoading) return;
+                if (!inputText.trim() && selectedImages.length === 0) return;
 
+                // 如果已有排队请求或正在等待request_id，禁止发送
+                if (pendingRequest || isWaitingRequestId) return;
+
+                const content = inputText.trim();
+                const images = [...selectedImages];
+                const useDeepSearch = deepSearch;
+
+                // 如果正在加载，将请求加入排队
+                if (isLoading) {
+                    setPendingRequest({
+                        content: content,
+                        images: images,
+                        deepSearch: useDeepSearch
+                    });
+                    setInputText('');
+                    setSelectedImages([]);
+                    return;
+                }
+
+                // 清空输入框
+                setInputText('');
+                setSelectedImages([]);
+
+                // 发送消息
+                await doSendMessage(content, images, useDeepSearch);
+            };
+
+            // 发送排队中的消息
+            const sendPendingMessage = async (request) => {
+                await doSendMessage(request.content, request.images, request.deepSearch);
+            };
+
+            // 实际发送消息的核心函数
+            const doSendMessage = async (content, images, useDeepSearch) => {
                 // 构建 content 列表
                 const contentList = [];
                 
                 // 添加文本块
-                if (inputText.trim()) {
+                if (content) {
                     contentList.push({
                         type: 'text',
-                        text: inputText.trim()
+                        text: content
                     });
                 }
                 
                 // 添加图片块
-                selectedImages.forEach(img => {
+                images.forEach(img => {
                     // 从 base64 data URL 中提取 media_type 和纯 base64 数据
                     const mediaTypeMatch = img.base64.match(/^data:([^;]+);base64,/);
                     const mediaType = mediaTypeMatch ? mediaTypeMatch[1] : 'image/png';
@@ -1597,26 +1751,25 @@
 
                 const userMessage = {
                     role: 'user',
-                    content: inputText.trim(),
-                    images: selectedImages.map(img => img.base64)
+                    content: content,
+                    images: images.map(img => img.base64)
                 };
 
                 // 在添加消息之前重置滚动状态
                 userScrolledRef.current = false;
+                // 重置打断标志
+                abortRef.current = false;
                 console.log('开始新对话，重置滚动状态');
 
                 setMessages(prev => [
                     ...prev,
                     userMessage,
-                    // 立即添加一个空的助手消息用于显示加载动画
                     {
                         role: 'assistant',
                         contents: []
                     }
                 ]);
-                setInputText('');
-                setSelectedImages([]);
-                setIsLoading(true);
+                setIsWaitingRequestId(true);
 
                 try {
                     const response = await fetch('/chat', {
@@ -1627,7 +1780,7 @@
                         body: JSON.stringify({
                             session_id: sessionId,
                             content: contentList,
-                            deepresearch: deepSearch
+                            deepresearch: useDeepSearch
                         })
                     });
 
@@ -1638,51 +1791,56 @@
                     const reader = response.body.getReader();
                     const decoder = new TextDecoder();
                     let buffer = '';
-                    
-                    // 用 Map 存储每个 msg_id 对应的 block（每个 block 是一个 contents 数组）
                     let messageBlocks = new Map();
-                    // 消息 ID 的顺序列表
                     let messageIdOrder = [];
-                    
+                    let requestIdReceived = false;
+
                     while (true) {
+                        if (abortRef.current) {
+                            reader.cancel();
+                            break;
+                        }
+
                         const { done, value } = await reader.read();
-                        
+
                         if (done) break;
-                        
+
+                        if (abortRef.current) {
+                            reader.cancel();
+                            break;
+                        }
+
                         buffer += decoder.decode(value, { stream: true });
                         const lines = buffer.split('\n\n');
                         buffer = lines.pop() || '';
-                        
+
                         for (const line of lines) {
+                            if (abortRef.current) break;
+
                             if (line.startsWith('data: ')) {
                                 try {
                                     const data = JSON.parse(line.slice(6));
-                                    const msgId = data.msg_id || 'unknown';
-                                    
-                                    // 调试日志
-                                    if (data.plan) {
-                                        console.log('Received plan:', data.plan);
+
+                                    if (data.request_id && !requestIdReceived) {
+                                        currentRequestIdRef.current = data.request_id;
+                                        requestIdReceived = true;
+                                        setIsWaitingRequestId(false);
+                                        setIsLoading(true);
                                     }
-                                    
-                                    // 更新 plan 信息（如果为空则清除）
+
+                                    const msgId = data.msg_id || 'unknown';
                                     if (data.plan !== undefined) {
                                         setCurrentPlan(data.plan || null);
                                     }
-                                    
-                                    // 如果是新的 msg_id，记录顺序
                                     if (!messageBlocks.has(msgId)) {
                                         messageIdOrder.push(msgId);
                                     }
-                                    
-                                    // 用当前 SSE 消息的 contents 覆盖该 msg_id 的 block
                                     messageBlocks.set(msgId, data.contents || []);
-                                    
-                                    // 更新消息显示
+                                    if (abortRef.current) break;
                                     setMessages(prev => {
+                                        if (abortRef.current) return prev;
                                         const newMessages = [...prev];
                                         const lastMsg = newMessages[newMessages.length - 1];
-                                        
-                                        // 按照 msg_id 顺序组合所有 block 的 contents
                                         const allContents = [];
                                         for (const id of messageIdOrder) {
                                             const blockContents = messageBlocks.get(id);
@@ -1690,15 +1848,12 @@
                                                 allContents.push(...blockContents);
                                             }
                                         }
-                                        
                                         if (lastMsg && lastMsg.role === 'assistant') {
-                                            // 更新最后一条助手消息
                                             newMessages[newMessages.length - 1] = {
                                                 role: 'assistant',
                                                 contents: allContents
                                             };
                                         } else {
-                                            // 添加新的助手消息
                                             newMessages.push({
                                                 role: 'assistant',
                                                 contents: allContents
@@ -1706,7 +1861,6 @@
                                         }
                                         return newMessages;
                                     });
-                                    
                                 } catch (e) {
                                     console.error('Failed to parse SSE data:', e);
                                 }
@@ -1723,13 +1877,16 @@
                         }]
                     }]);
                 } finally {
-                    setIsLoading(false);
-                    // 回答结束后聚焦到输入框
-                    setTimeout(() => {
-                        if (inputRef.current) {
-                            inputRef.current.focus();
-                        }
-                    }, 100);
+                    if (!abortRef.current) {
+                        setIsLoading(false);
+                        setIsWaitingRequestId(false);
+                        currentRequestIdRef.current = null;
+                        setTimeout(() => {
+                            if (inputRef.current) {
+                                inputRef.current.focus();
+                            }
+                        }, 100);
+                    }
                 }
             };
 
@@ -1919,13 +2076,44 @@
                         ))}
                         <div ref={messagesEndRef} />
                     </div>
-                    
+
+                    {/* 深度研究开关 - 单独一行 */}
+                    <div className="deep-search-row">
+                        <div
+                            className={`deep-search-toggle ${deepSearch ? 'active' : ''} ${(isLoading || isWaitingRequestId) ? 'disabled' : ''}`}
+                            onClick={() => !(isLoading || isWaitingRequestId) && setDeepSearch(!deepSearch)}
+                        >
+                            <span className="toggle-label">深度研究</span>
+                            <div className="toggle-switch"></div>
+                        </div>
+                    </div>
+
                     <div className="chat-input-container">
+                        {/* 排队中的消息显示在输入框上方 */}
+                        {pendingRequest && (
+                            <div className="pending-request-banner">
+                                <div className="pending-request-content">
+                                    <span className="pending-label">排队中</span>
+                                    <span className="pending-text">{pendingRequest.content}</span>
+                                    {pendingRequest.images && pendingRequest.images.length > 0 && (
+                                        <span className="pending-images-count">📷 {pendingRequest.images.length}</span>
+                                    )}
+                                </div>
+                                <button
+                                    className="cancel-pending-btn"
+                                    onClick={() => setPendingRequest(null)}
+                                    title="取消排队"
+                                >
+                                    ✕
+                                </button>
+                            </div>
+                        )}
+
                         {showSkillSuggestions && (
                             <div className="skill-suggestions">
                                 {getFilteredSkills().length > 0 ? (
                                     getFilteredSkills().map((skill, index) => (
-                                        <div 
+                                        <div
                                             key={skill.name}
                                             className={`skill-item ${index === selectedSkillIndex ? 'selected' : ''}`}
                                             onClick={() => selectSkill(index)}
@@ -1957,19 +2145,19 @@
                         <button
                             className="image-upload-btn"
                             onClick={() => fileInputRef.current?.click()}
-                            disabled={isLoading}
+                            disabled={pendingRequest || isWaitingRequestId}
                             title="上传图片"
                         >
                             📷
                         </button>
-                        
+
                         {/* 已选图片预览 */}
                         {selectedImages.length > 0 && (
                             <div className="image-preview-container">
                                 {selectedImages.map(img => (
                                     <div key={img.id} className="image-preview">
                                         <img src={img.base64} alt={img.name} />
-                                        <button 
+                                        <button
                                             className="remove-btn"
                                             onClick={() => removeImage(img.id)}
                                             title="移除图片"
@@ -1980,7 +2168,7 @@
                                 ))}
                             </div>
                         )}
-                        
+
                         <input
                             ref={inputRef}
                             type="text"
@@ -1989,30 +2177,22 @@
                             value={inputText}
                             onChange={(e) => setInputText(e.target.value)}
                             onKeyDown={handleKeyPress}
-                            disabled={isLoading}
+                            disabled={pendingRequest || isWaitingRequestId}
                         />
-                        <div 
-                            className={`deep-search-toggle ${deepSearch ? 'active' : ''}`}
-                            onClick={() => setDeepSearch(!deepSearch)}
+                        <button
+                            className="send-button"
+                            onClick={sendMessage}
+                            disabled={(!inputText.trim() && selectedImages.length === 0) || pendingRequest || isWaitingRequestId}
                         >
-                            <span className="toggle-label">深度研究</span>
-                            <div className="toggle-switch"></div>
-                        </div>
-                        {isLoading ? (
+                            发送
+                        </button>
+                        {isLoading && (
                             <button
                                 className="stop-button"
                                 onClick={stopGeneration}
                             >
                                 <div className="stop-icon"></div>
                                 打断
-                            </button>
-                        ) : (
-                            <button
-                                className="send-button"
-                                onClick={sendMessage}
-                                disabled={!inputText.trim() && selectedImages.length === 0}
-                            >
-                                发送
                             </button>
                         )}
                     </div>
