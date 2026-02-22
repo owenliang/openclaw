@@ -39,6 +39,7 @@ async def agent_runner(sess: Session):
     while True:
         request,status = await sess.get_request()
         if request is None:
+            print(f"session expires {sess.session_id}")
             await sess.release()
             break
         
