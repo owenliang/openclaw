@@ -284,7 +284,7 @@ async def build_agent_toolkit(sess: Session):
             type="stdio",
             name="Playwright-MCP",
             command="npx",
-            args=["@playwright/mcp@latest"]
+            args=["-y","@playwright/mcp@latest"]
         )
     # Stateless MCP
     if FLAGS["enable_bazi_mcp"]:
