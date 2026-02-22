@@ -39,6 +39,7 @@ async def agent_runner(sess: Session):
     while True:
         request,status = await sess.get_request()
         if request is None:
+            await sess.release()
             break
         
         session_id=request.session_id
@@ -143,8 +144,8 @@ async def agent_runner(sess: Session):
         except Exception:
             print(e)
         finally:
-            response_q.put(None)
-            sess.finish_request(request)
+            await response_q.put(None)
+            await sess.finish_request(request)
 
 async def create_agent_if_not_exists(session_id: str) -> Session:
     sess=await sess_mgr.get_or_create_session(session_id)

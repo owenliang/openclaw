@@ -72,8 +72,6 @@ class Session:
 
     async def activate(self):
         async with self.lock:
-            if self.status==SessionStatus.INACTIVE:
-                return
             self._activate()
 
     async def transition_to_active(self) -> bool:
@@ -82,6 +80,11 @@ class Session:
                 self.status=SessionStatus.ACTIVE
                 return True
         return False
+
+    async def transition_to_inactive(self):
+        async with self.lock:
+            self.status=SessionStatus.INACTIVE
+            await self.req_queue.put(None)  # notify consumer
 
     async def add_request(self,request: AgentRequest):
         async with self.lock:
@@ -113,8 +116,6 @@ class Session:
 
     async def register_sandbox(self,toolkit: Toolkit) -> bool:
         async with self.lock:
-            if self.status!=SessionStatus.ACTIVE:
-                return False
             self._activate()
             if self.sandbox is None:
                 sandboxes = self.sandbox_service.connect(session_id=self.session_id,sandbox_types=["browser"])
@@ -126,8 +127,6 @@ class Session:
 
     async def register_stateful_mcp(self, toolkit: Toolkit, type: Literal["stdio", "http"], name, **kwargs) -> bool:
         async with self.lock:
-            if self.status!=SessionStatus.ACTIVE:
-                return False
             self._activate()
             if name not in self.mcp_wrappers:
                 q = asyncio.Queue()
@@ -163,9 +162,6 @@ class Session:
 
     async def release(self):
         async with self.lock:
-            if self.status==SessionStatus.INACTIVE:
-                return
-            self.status=SessionStatus.INACTIVE
             # mcp
             for mcp_wrapper in self.mcp_wrappers.values():
                 try:
@@ -176,8 +172,6 @@ class Session:
             # sandbox
             if self.sandbox is not None:
                 await self.sandbox_service.release(self.session_id)
-            # notify consumer
-            await self.req_queue.put(None)
 
 class GlobalSessionManager:
     def __init__(self, expires: float = 600, enable_sandbox: bool = True):
@@ -210,13 +204,12 @@ class GlobalSessionManager:
     async def validate_session(self, session_id):
         while True:
             await asyncio.sleep(0.1)
-            free_session = False
+            release_sess = False
             async with self.manager_lock:
                 session = self.sessions[session_id]
                 if time.time() - session.last_activate > self.expires:
-                    free_session = True
+                    release_sess = True
                     del self.sessions[session_id]
-            if free_session:
-                print(f"Release Session ID {session_id}")
-                await session.release()
+            if release_sess:
+                await session.transition_to_inactive()
                 break
