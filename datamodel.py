@@ -19,10 +19,11 @@ class AgentRequest:
         self.stream_task = None
         self.canceled = False
 
-    def cancel(self):
+    async def cancel(self):
         self.canceled = True
         if self.stream_task:
             try:
                 self.stream_task.cancel()
+                await self.stream_task
             except:
                 pass

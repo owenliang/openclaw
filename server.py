@@ -1,4 +1,6 @@
 import os
+import asyncio
+import json
 from contextlib import asynccontextmanager
 import fastapi
 from agentscope.tool import Toolkit
@@ -47,12 +49,16 @@ async def get_commands():
     
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    sess = await create_agent_if_not_exists(request.session_id)
-
-    agent_req=AgentRequest(session_id=request.session_id, content=request.content, deepresearch=request.deepresearch)
-    await sess.add_request(agent_req)
+    for _ in range(3):# 为session过期瞬间兜底
+        sess = await create_agent_if_not_exists(request.session_id)
+        agent_req=AgentRequest(session_id=request.session_id, content=request.content, deepresearch=request.deepresearch)
+        if await sess.add_request(agent_req):
+            break
+        await asyncio.sleep(0.5)
 
     async def event_generator():
+        yield f"data: {json.dumps({'request_id': agent_req.id})}\n\n"   # 首先发送request_id
+        
         while True:
             msg = await agent_req.response_queue.get()
             if msg is None:

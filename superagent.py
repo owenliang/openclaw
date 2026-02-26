@@ -38,17 +38,18 @@ async def register_sess_keepalive(agent,sess):
 async def agent_runner(sess: Session):
     while True:
         request,status = await sess.get_request()
-        if request is None:
-            print(f"session expires {sess.session_id}")
-            await sess.release()
+        if status==SessionStatus.INACTIVE:
+            print(f'session {sess.session_id} is inactive')
+            await sess_mgr.delete_session(sess.session_id) # 内存中淘汰会话，下一个请求正常响应；已经持有session对象的请求add request会立即拒绝；
+            await sess.release() # 释放MCP资源
             break
         
-        session_id=request.session_id
-        response_q=request.response_queue
-        try:
-            if status != SessionStatus.ACTIVE:
-                continue
+        await sess.activate() 
 
+        # 请求处理
+        try:
+            session_id=request.session_id
+            response_q=request.response_queue
             toolkit=await build_agent_toolkit(sess)
 
             extra_sys_prompt = []
@@ -117,7 +118,8 @@ async def agent_runner(sess: Session):
             q=asyncio.Queue()
             async def streaming():
                 try:
-                    await q.put(f"data: {json.dumps({'request_id': request.id}, ensure_ascii=False)}\n\n")
+                    if request.canceled:
+                        return
                     async for msg,last in stream_printing_messages(agents=[agent],coroutine_task=agent(inputs)):
                         msg_id = msg.id if hasattr(msg, 'id') else None
                         msg_ret={'msg_id': msg_id,'last': last,'contents':[],'plan':plan_notebook.current_plan.model_dump() if plan_notebook and plan_notebook.current_plan else None}
@@ -142,14 +144,12 @@ async def agent_runner(sess: Session):
                 await response_q.put(msg)
                 if msg is None:
                     break
-        except Exception:
-            print(e)
+        except Exception as e:
+            print(f"Error in agent_runner: {e}")
         finally:
             await response_q.put(None)
             await sess.finish_request(request)
 
 async def create_agent_if_not_exists(session_id: str) -> Session:
-    sess=await sess_mgr.get_or_create_session(session_id)
-    if await sess.transition_to_active():
-        asyncio.create_task(agent_runner(sess))
+    sess=await sess_mgr.get_or_create_session(session_id,create=True,session_main=agent_runner)
     return sess

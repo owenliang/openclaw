@@ -2,7 +2,7 @@ import asyncio
 import time
 import uuid
 from enum import Enum
-from typing import Dict, Literal
+from typing import Callable, Dict, Literal
 
 from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
 from agentscope.tool import Toolkit
@@ -39,9 +39,8 @@ BROWSER_TOOLS=[
 ]
 
 class SessionStatus(Enum):
-    INIT = "init"
-    ACTIVE = "active"
-    INACTIVE = "inactive"
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
 
 class MCPWrapper:
     def __init__(self, client):
@@ -56,15 +55,17 @@ class MCPWrapper:
         await self.client.close()
 
 class Session:
-    def __init__(self, session_id, sandbox_service):
+    def __init__(self, session_id, sandbox_service, expires:float=60):
         self.session_id = session_id
         self.lock = asyncio.Lock()
+        self.cond = asyncio.Condition(self.lock)
         self.mcp_wrappers: Dict[str, MCPWrapper] = {}
         self.sandbox: Sandbox | None = None
         self.sandbox_service: SandboxService = sandbox_service
         self.req_queue=asyncio.Queue()
         self.last_activate = time.time()
-        self.status=SessionStatus.INIT
+        self.expires = expires
+        self.status=SessionStatus.ACTIVE
         self.pending_req: Dict[str, AgentRequest] = {} 
 
     def _activate(self):
@@ -74,31 +75,26 @@ class Session:
         async with self.lock:
             self._activate()
 
-    async def transition_to_active(self) -> bool:
-        async with self.lock:
-            if self.status==SessionStatus.INIT:
-                self.status=SessionStatus.ACTIVE
-                return True
-        return False
-
-    async def transition_to_inactive(self):
-        async with self.lock:
-            self.status=SessionStatus.INACTIVE
-            await self.req_queue.put(None)  # notify consumer
-
-    async def add_request(self,request: AgentRequest):
-        async with self.lock:
-            if self.status!=SessionStatus.ACTIVE:
+    async def add_request(self,request: AgentRequest) -> bool: 
+        async with self.cond:
+            if self.status==SessionStatus.INACTIVE: # 极为短暂的时间，请求受损暂时没办法
                 await request.response_queue.put(None)
-                return
+                return False
             self.pending_req[request.id] = request
             await self.req_queue.put(request)
+            self.cond.notify()
         return True
 
     async def get_request(self) -> tuple[AgentRequest|None, SessionStatus]:
-        async with self.lock:
-            status = self.status
-        return await self.req_queue.get(), status
+        async with self.cond:
+            while self.req_queue.empty():
+                try:
+                    await asyncio.wait_for(self.cond.wait(), timeout=1)  
+                except asyncio.TimeoutError:
+                    if time.time() - self.last_activate > self.expires:
+                        self.status = SessionStatus.INACTIVE    # agent coroutine拿到这个状态后，应该尽快销毁session
+                        return None, self.status
+            return await self.req_queue.get(), self.status
 
     async def finish_request(self,request: AgentRequest):
         async with self.lock:
@@ -109,14 +105,10 @@ class Session:
         async with self.lock:
             if request_id in self.pending_req:
                 request = self.pending_req[request_id]
-                try:
-                    request.cancel()
-                except:
-                    pass
+                await request.cancel()
 
     async def register_sandbox(self,toolkit: Toolkit) -> bool:
         async with self.lock:
-            self._activate()
             if self.sandbox is None:
                 sandboxes = self.sandbox_service.connect(session_id=self.session_id,sandbox_types=["browser"])
                 self.sandbox = sandboxes[0] # browser
@@ -127,7 +119,6 @@ class Session:
 
     async def register_stateful_mcp(self, toolkit: Toolkit, type: Literal["stdio", "http"], name, **kwargs) -> bool:
         async with self.lock:
-            self._activate()
             if name not in self.mcp_wrappers:
                 q = asyncio.Queue()
                 async def mcp_lifecycle():
@@ -174,12 +165,12 @@ class Session:
                 await self.sandbox_service.release(self.session_id)
 
 class GlobalSessionManager:
-    def __init__(self, expires: float = 600, enable_sandbox: bool = True):
-        self.expires = expires
+    def __init__(self, enable_sandbox: bool = True, expires: float = 60):
         self.manager_lock = asyncio.Lock()
         self.sessions: Dict[str, Session] = {}
         self.sandbox_service = SandboxService()
         self.enable_sandbox = enable_sandbox
+        self.expires = expires
 
     async def __aenter__(self):
         if self.enable_sandbox:
@@ -189,27 +180,22 @@ class GlobalSessionManager:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         return
 
-    async def get_or_create_session(self, session_id, create=True) -> Session: 
+    async def get_or_create_session(self, session_id, create=True, session_main: Callable=None) -> Session: 
         async with self.manager_lock: 
             if session_id not in self.sessions:
                 if create:
-                    self.sessions[session_id] = Session(session_id, self.sandbox_service)
-                    asyncio.create_task(self.validate_session(session_id))
-            return self.sessions.get(session_id,None)
+                    self.sessions[session_id] = Session(session_id, self.sandbox_service,expires=self.expires)
+                    asyncio.create_task(session_main(self.sessions[session_id]))
+            session = self.sessions.get(session_id,None)
+            if session is not None:
+                await session.activate()
+            return session
+
+    async def delete_session(self, session_id):
+        async with self.manager_lock:
+            if session_id in self.sessions:
+                del self.sessions[session_id]
 
     def temp_session(self):
         session_id = str(uuid.uuid4())
         return Session(session_id, self.sandbox_service)
-
-    async def validate_session(self, session_id):
-        while True:
-            await asyncio.sleep(0.1)
-            release_sess = False
-            async with self.manager_lock:
-                session = self.sessions[session_id]
-                if time.time() - session.last_activate > self.expires:
-                    release_sess = True
-                    del self.sessions[session_id]
-            if release_sess:
-                await session.transition_to_inactive()
-                break
