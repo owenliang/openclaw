@@ -18,8 +18,10 @@
 - **实时流式响应**：SSE 流式传输，支持打字机效果
 - **多请求排队**：同一会话支持多个请求排队，自动顺序执行
 - **真打断机制**：基于 request_id 的精准打断，可终止指定 SSE 请求
+- **MCP 长连接**：有状态 MCP 客户端保持长连接，支持 Playwright 浏览器等
+- **定时任务调度**：CronManager 支持 session 级定时任务，持久化到磁盘
 - **工具调用生态**：
-  - 内置工具：文件操作、Shell 命令、联网搜索
+  - 内置工具：文件操作、Shell 命令、联网搜索、定时任务管理
   - MCP 集成：Playwright 浏览器、八字算命等外部服务
 - **会话管理**：多会话隔离，支持长文本压缩和记忆恢复
 - **深度研究模式**：Agentic Planning 支持复杂任务拆解
@@ -38,6 +40,17 @@ graph TB
         FastAPI[FastAPI Server]
     end
 
+    subgraph "会话管理层 SessionManager"
+        SessionMgr[GlobalSessionManager]
+        ReqQueue[请求队列 asyncio.Queue]
+        Session1[Session A]
+        Session2[Session B]
+        SessionMgr -->|管理| Session1
+        SessionMgr -->|管理| Session2
+        Session1 -->|排队| ReqQueue
+        Session2 -->|排队| ReqQueue
+    end
+
     subgraph "Agent层"
         ReAct[ReActAgent]
         Memory[记忆管理]
@@ -53,8 +66,24 @@ graph TB
         MCP[MCP 客户端]
     end
 
+    subgraph "MCP 长连接层"
+        MCPState1[Playwright MCP 长连接]
+        MCPState2[其他有状态 MCP]
+    end
+
+    subgraph "定时任务层 CronManager"
+        CronMgr[CronManager]
+        CronJob1[CronJob Session A]
+        CronJob2[CronJob Session B]
+        CronMgr -->|调度| CronJob1
+        CronMgr -->|调度| CronJob2
+        CronJob1 -.->|触发请求| Session1
+        CronJob2 -.->|触发请求| Session2
+    end
+
     UI -->|SSE 流式| FastAPI
-    FastAPI -->|调用| ReAct
+    FastAPI -->|get_or_create_session| SessionMgr
+    SessionMgr -->|agent_runner| ReAct
     ReAct -->|加载| Skills
     ReAct -->|调用| BuiltIn
     ReAct -->|调用| MCP
@@ -62,6 +91,8 @@ graph TB
     Skills -.->|指导调用| MCP
     ReAct -->|读写| Memory
     ReAct -->|使用| Plan
+    MCP -->|长连接| MCPState1
+    MCP -->|长连接| MCPState2
 ```
 
 ## 4. 运行方法
@@ -88,6 +119,35 @@ python server.py
 
 服务启动后，访问 http://localhost:8000 即可使用。
 
+### 内置工具列表
+
+| 工具名称 | 功能描述 | 启用状态 |
+|---------|---------|---------|
+| view_text_file | 查看文本文件内容 | 默认启用 |
+| write_text_file | 写入文本文件 | 默认启用 |
+| insert_text_file | 在指定位置插入文本 | 默认启用 |
+| execute_shell_command | 执行 Shell 命令 | 默认启用 |
+| web_search | 联网搜索（支持图文混排） | 默认启用 |
+| add_cron | 添加定时任务 | 默认启用 |
+| del_cron | 删除定时任务 | 默认启用 |
+| list_crons | 列出定时任务 | 默认启用 |
+| subagent | 子代理委托 | 默认启用 |
+
+### 内置技能列表
+
+| 技能名称 | 功能描述 |
+|---------|---------|
+| find-skills | 帮助用户发现和安装 Agent Skills，支持通过 `npx skills` 命令搜索和安装社区技能 |
+| python-code-review | Python 代码审查，检查类型安全、异步模式、错误处理和常见错误 |
+| xlsx | Excel 文件处理，支持创建、编辑、分析 .xlsx/.csv 文件，包含公式重算和格式规范 |
+
+### MCP 集成
+
+| MCP 名称 | 类型 | 功能描述 |
+|---------|------|---------|
+| Playwright-MCP | 有状态/stdio | 浏览器自动化控制 |
+| Bazi-MCP | 无状态/SSE | 八字算命服务 |
+
 ### 项目结构
 
 ```
@@ -98,6 +158,7 @@ python server.py
 ├── model.py            # 模型定义
 ├── datamodel.py        # 数据模型
 ├── session.py          # 会话管理
+├── cron_manager.py     # 定时任务管理
 ├── chat.html           # 前端页面
 ├── assets/
 │   └── image/          # 图片资源
