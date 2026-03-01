@@ -14,8 +14,10 @@ from agentscope.session import JSONSession
 from model import OpenAIChatModelCached, VLTokenCounter
 from session import Session, GlobalSessionManager, SessionStatus
 from tools import build_agent_toolkit, build_subagent_tool, FLAGS, AGENT_SYS_PROMPT, SUBAGENT_PROMPT
+from cron_manager import CronManager
 
 sess_mgr = GlobalSessionManager(expires=60, enable_sandbox=FLAGS["enable_sandbox"])
+cron_mgr = CronManager(sess_mgr)
 
 async def register_reasoning_hint(agent):
     async def add_reasoning_hint(agent,kwargs):

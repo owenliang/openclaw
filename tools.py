@@ -35,6 +35,7 @@ FLAGS = {
     "enable_insert_text_file": True,  # 是否启用插入文本文件TOOL
     "enable_execute_shell_command": True,  # 是否启用执行Shell命令TOOL
     "enable_subagent": True,  # 是否启用子代理
+    "enable_cron": True,  # 是否启用定时任务管理
 }
 
 # Agent系统提示词模板
@@ -237,6 +238,96 @@ async def build_subagent_tool(sess_mgr: GlobalSessionManager):
     return subagent_tool
 
 
+async def build_cron_tools(session_id: str):
+    """Build cron management tools for a specific session."""
+    
+    async def add_cron(cron_expr: str, task_description: str) -> ToolResponse:
+        '''
+        Add a scheduled cron job that will execute the given task description periodically.
+        
+        Args:
+            cron_expr: Cron expression string. Supports formats like:
+                - "*/5 * * * *" - every 5 minutes
+                - "@minutely" - every minute
+                - "@hourly" - every hour
+                - "@daily" - every day
+            task_description: The task description to send to the AI agent when cron triggers
+            
+        Returns:
+            ToolResponse with the unique job ID for the created cron job
+        '''
+        from superagent import cron_mgr
+        job_id = await cron_mgr.add_cron(session_id, cron_expr, task_description)
+        return ToolResponse(
+            content=[
+                TextBlock(
+                    type="text",
+                    text=f"Cron job created successfully. Job ID: {job_id}",
+                ),
+            ],
+        )
+    
+    async def del_cron(job_id: str) -> ToolResponse:
+        '''
+        Delete a scheduled cron job by its job ID.
+        
+        Args:
+            job_id: The unique job ID returned by add_cron
+            
+        Returns:
+            ToolResponse with success or failure message
+        '''
+        from superagent import cron_mgr
+        success = await cron_mgr.del_cron(session_id, job_id)
+        return ToolResponse(
+            content=[
+                TextBlock(
+                    type="text",
+                    text=f"Cron job {job_id} deleted successfully." if success else f"Cron job {job_id} not found.",
+                ),
+            ],
+        )
+    
+    async def list_crons() -> ToolResponse:
+        '''
+        List all scheduled cron jobs for current session.
+        
+        Returns:
+            ToolResponse with a formatted list of all cron jobs
+        '''
+        from superagent import cron_mgr
+        jobs = await cron_mgr.list_crons(session_id)
+        if not jobs:
+            return ToolResponse(
+                content=[
+                    TextBlock(
+                        type="text",
+                        text="No cron jobs scheduled for this session.",
+                    ),
+                ],
+            )
+        
+        lines = [f"Scheduled Cron Jobs for session '{session_id}':", "-" * 80]
+        for job in jobs:
+            status = "running" if job["running"] else "stopped"
+            lines.append(f"ID: {job['id']}")
+            lines.append(f"  Expression: {job['cron_expr']}")
+            lines.append(f"  Task: {job['task_description'][:50]}...")
+            lines.append(f"  Status: {status}")
+            lines.append("")
+        
+        return ToolResponse(
+            content=[
+                TextBlock(
+                    type="text",
+                    text="\n".join(lines),
+                ),
+            ],
+        )
+    
+    return add_cron, del_cron, list_crons
+
+
 async def build_agent_toolkit(sess: Session):
     toolkit = Toolkit(
         agent_skill_instruction=f'''# Skills 使用指南
@@ -293,4 +384,12 @@ async def build_agent_toolkit(sess: Session):
         )
     if FLAGS["enable_websearch"]:
         toolkit.register_tool_function(web_search)
+    
+    # Cron tools
+    if FLAGS["enable_cron"]:
+        add_cron_tool, del_cron_tool, list_crons_tool = await build_cron_tools(sess.session_id)
+        toolkit.register_tool_function(add_cron_tool)
+        toolkit.register_tool_function(del_cron_tool)
+        toolkit.register_tool_function(list_crons_tool)
+    
     return toolkit

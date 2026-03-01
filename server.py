@@ -7,7 +7,7 @@ from agentscope.tool import Toolkit
 from fastapi import Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from datamodel import AgentRequest, ChatRequest
-from superagent import create_agent_if_not_exists, sess_mgr
+from superagent import create_agent_if_not_exists, sess_mgr, cron_mgr
 from dotenv import load_dotenv
 import uvicorn
 
@@ -15,6 +15,8 @@ import uvicorn
 async def lifespan(app):
     async with sess_mgr:
         os.makedirs(".agents/skills/",exist_ok=True)
+        # Load persisted cron jobs on startup
+        await cron_mgr.load_from_disk()
         yield
 
 app=fastapi.FastAPI(lifespan=lifespan)
@@ -48,7 +50,7 @@ async def get_commands():
             toolkit.register_agent_skill(os.path.join(".agents/skills", skill_dir))
     skills_list = list(toolkit.skills.values())
     return {"skills": skills_list}
-    
+
 @app.post("/chat")
 async def chat(request: ChatRequest):
     queue_ok=False

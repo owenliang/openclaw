@@ -3,3 +3,4 @@ fastapi
 uvicorn
 pillow
 agentscope-runtime
+croniter>=1.0.0
