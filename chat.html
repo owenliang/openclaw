@@ -1650,32 +1650,63 @@
                 }
             };
 
+            // 统一处理图片文件（选择/粘贴）
+            const addImageFile = (file) => {
+                if (!file || !file.type.startsWith('image/')) {
+                    console.warn('非图片文件:', file && file.name);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const base64Data = event.target.result;
+                    setSelectedImages(prev => [...prev, {
+                        id: generateUUID(),
+                        name: file.name,
+                        base64: base64Data,
+                        type: file.type
+                    }]);
+                };
+                reader.readAsDataURL(file);
+            };
+
             // 处理图片选择
             const handleImageSelect = (e) => {
                 const files = Array.from(e.target.files);
                 if (files.length === 0) return;
 
                 files.forEach(file => {
-                    if (!file.type.startsWith('image/')) {
-                        console.warn('非图片文件:', file.name);
-                        return;
-                    }
-
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        const base64Data = event.target.result;
-                        setSelectedImages(prev => [...prev, {
-                            id: generateUUID(),
-                            name: file.name,
-                            base64: base64Data,
-                            type: file.type
-                        }]);
-                    };
-                    reader.readAsDataURL(file);
+                    addImageFile(file);
                 });
 
                 // 清空 input 以便可以重复选择相同文件
                 e.target.value = '';
+            };
+
+            // 处理粘贴图片
+            const handlePaste = (e) => {
+                const items = e.clipboardData && e.clipboardData.items;
+                if (!items) {
+                    return;
+                }
+
+                let hasImage = false;
+
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i];
+                    if (item.type && item.type.startsWith('image/')) {
+                        const file = item.getAsFile();
+                        if (file) {
+                            addImageFile(file);
+                            hasImage = true;
+                        }
+                    }
+                }
+
+                // 不阻止默认行为，让文本内容仍然可以正常粘贴
+                if (hasImage) {
+                    console.log('检测到粘贴图片，已添加到预览');
+                }
             };
 
             // 移除选中的图片
@@ -2177,6 +2208,7 @@
                             value={inputText}
                             onChange={(e) => setInputText(e.target.value)}
                             onKeyDown={handleKeyPress}
+                            onPaste={handlePaste}
                             disabled={pendingRequest || isWaitingRequestId}
                         />
                         <button
