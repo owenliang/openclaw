@@ -238,8 +238,8 @@ async def build_subagent_tool(sess_mgr: GlobalSessionManager):
     return subagent_tool
 
 
-async def build_cron_tools(session_id: str):
-    """Build cron management tools for a specific session."""
+async def build_cron_tools():
+    """Build cron management tools."""
     
     async def add_cron(cron_expr: str, task_description: str) -> ToolResponse:
         '''
@@ -257,7 +257,7 @@ async def build_cron_tools(session_id: str):
             ToolResponse with the unique job ID for the created cron job
         '''
         from superagent import cron_mgr
-        job_id = await cron_mgr.add_cron(session_id, cron_expr, task_description)
+        job_id = await cron_mgr.add_cron(cron_expr, task_description)
         return ToolResponse(
             content=[
                 TextBlock(
@@ -278,7 +278,7 @@ async def build_cron_tools(session_id: str):
             ToolResponse with success or failure message
         '''
         from superagent import cron_mgr
-        success = await cron_mgr.del_cron(session_id, job_id)
+        success = await cron_mgr.del_cron(job_id)
         return ToolResponse(
             content=[
                 TextBlock(
@@ -290,24 +290,24 @@ async def build_cron_tools(session_id: str):
     
     async def list_crons() -> ToolResponse:
         '''
-        List all scheduled cron jobs for current session.
+        List all scheduled cron jobs.
         
         Returns:
             ToolResponse with a formatted list of all cron jobs
         '''
         from superagent import cron_mgr
-        jobs = await cron_mgr.list_crons(session_id)
+        jobs = await cron_mgr.list_crons()
         if not jobs:
             return ToolResponse(
                 content=[
                     TextBlock(
                         type="text",
-                        text="No cron jobs scheduled for this session.",
+                        text="No cron jobs scheduled.",
                     ),
                 ],
             )
         
-        lines = [f"Scheduled Cron Jobs for session '{session_id}':", "-" * 80]
+        lines = ["Scheduled Cron Jobs:", "-" * 80]
         for job in jobs:
             status = "running" if job["running"] else "stopped"
             lines.append(f"ID: {job['id']}")
@@ -387,7 +387,7 @@ async def build_agent_toolkit(sess: Session):
     
     # Cron tools
     if FLAGS["enable_cron"]:
-        add_cron_tool, del_cron_tool, list_crons_tool = await build_cron_tools(sess.session_id)
+        add_cron_tool, del_cron_tool, list_crons_tool = await build_cron_tools()
         toolkit.register_tool_function(add_cron_tool)
         toolkit.register_tool_function(del_cron_tool)
         toolkit.register_tool_function(list_crons_tool)

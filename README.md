@@ -19,7 +19,7 @@
 - **多请求排队**：同一会话支持多个请求排队，自动顺序执行
 - **真打断机制**：基于 request_id 的精准打断，可终止指定 SSE 请求
 - **MCP 长连接**：有状态 MCP 客户端保持长连接，支持 Playwright 浏览器等
-- **定时任务调度**：CronManager 支持 session 级定时任务，持久化到磁盘
+- **定时任务调度**：CronManager 统一管理定时任务，所有任务提交到专用 "cronjob" session 执行
 - **工具调用生态**：
   - 内置工具：文件操作、Shell 命令、联网搜索、定时任务管理
   - MCP 集成：Playwright 浏览器、八字算命等外部服务
@@ -73,17 +73,19 @@ graph TB
 
     subgraph "定时任务层 CronManager"
         CronMgr[CronManager]
-        CronJob1[CronJob Session A]
-        CronJob2[CronJob Session B]
+        CronJob1[CronJob]
+        CronJob2[CronJob]
+        CronSession[Session: cronjob]
         CronMgr -->|调度| CronJob1
         CronMgr -->|调度| CronJob2
-        CronJob1 -.->|触发请求| Session1
-        CronJob2 -.->|触发请求| Session2
+        CronJob1 -.->|触发请求| CronSession
+        CronJob2 -.->|触发请求| CronSession
     end
 
     UI -->|SSE 流式| FastAPI
     FastAPI -->|get_or_create_session| SessionMgr
     SessionMgr -->|agent_runner| ReAct
+    SessionMgr -->|agent_runner| CronSession
     ReAct -->|加载| Skills
     ReAct -->|调用| BuiltIn
     ReAct -->|调用| MCP

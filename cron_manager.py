@@ -9,12 +9,14 @@ from agentscope.message import TextBlock
 from croniter import croniter
 
 
+CRON_SESSION_ID = "cronjob"  # Fixed session ID for all cron jobs
+
+
 class CronJob:
     """Represents a scheduled cron job."""
     
-    def __init__(self, job_id: str, session_id: str, cron_expr: str, task_description: str):
+    def __init__(self, job_id: str, cron_expr: str, task_description: str):
         self.id = job_id
-        self.session_id = session_id
         self.cron_expr = cron_expr
         self.task_description = task_description
         self.task: asyncio.Task | None = None
@@ -24,7 +26,6 @@ class CronJob:
         """Serialize job to dict for persistence."""
         return {
             "id": self.id,
-            "session_id": self.session_id,
             "cron_expr": self.cron_expr,
             "task_description": self.task_description,
         }
@@ -34,14 +35,15 @@ class CronJob:
         """Create job from dict."""
         return cls(
             job_id=data["id"],
-            session_id=data.get("session_id", "main"),
             cron_expr=data["cron_expr"],
             task_description=data["task_description"],
         )
 
 
 class CronManager:
-    """Manages scheduled cron jobs with persistence and session isolation.
+    """Manages scheduled cron jobs with persistence.
+    
+    All cron jobs are executed in a dedicated "cronjob" session.
     
     Supports full cron expression syntax including:
     - Standard 5-field format: minute hour day month weekday (minute-level precision)
@@ -72,7 +74,7 @@ class CronManager:
     
     def __init__(self, session_manager, persistence_path: str = "./cron_jobs.json"):
         self._session_manager = session_manager
-        self._jobs: Dict[str, Dict[str, CronJob]] = {}  # session_id -> {job_id -> CronJob}
+        self._jobs: Dict[str, CronJob] = {}  # job_id -> CronJob
         self._lock = asyncio.Lock()
         self._persistence_path = persistence_path
     
@@ -87,20 +89,16 @@ class CronManager:
             
             for job_data in data.get("jobs", []):
                 job = CronJob.from_dict(job_data)
-                session_id = job.session_id
                 
                 async with self._lock:
-                    if session_id not in self._jobs:
-                        self._jobs[session_id] = {}
-                    self._jobs[session_id][job.id] = job
+                    self._jobs[job.id] = job
                 
                 # Schedule the job
                 next_delay = self._get_next_delay(job.cron_expr)
                 job.task = asyncio.create_task(self._run_cron_job(job, next_delay))
-                print(f"[CronManager] Restored cron job {job.id} for session {session_id}: {job.cron_expr}")
+                print(f"[CronManager] Restored cron job {job.id}: {job.cron_expr}")
             
-            total_jobs = sum(len(jobs) for jobs in self._jobs.values())
-            print(f"[CronManager] Loaded {total_jobs} jobs from {self._persistence_path}")
+            print(f"[CronManager] Loaded {len(self._jobs)} jobs from {self._persistence_path}")
         except Exception as e:
             print(f"[CronManager] Failed to load jobs from disk: {e}")
     
@@ -108,10 +106,7 @@ class CronManager:
         """Persist current jobs to disk."""
         try:
             async with self._lock:
-                all_jobs = []
-                for session_jobs in self._jobs.values():
-                    all_jobs.extend([job.to_dict() for job in session_jobs.values()])
-                data = {"jobs": all_jobs}
+                data = {"jobs": [job.to_dict() for job in self._jobs.values()]}
             
             with open(self._persistence_path, "w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=2)
@@ -155,12 +150,11 @@ class CronManager:
             print(f"[CronManager] Error parsing cron expression '{cron_expr}': {e}")
             raise ValueError(f"Invalid cron expression: {cron_expr}") from e
     
-    async def add_cron(self, session_id: str, cron_expr: str, task_description: str, job_id: str = None) -> str:
+    async def add_cron(self, cron_expr: str, task_description: str, job_id: str = None) -> str:
         """
-        Add a new cron job for a specific session.
+        Add a new cron job.
         
         Args:
-            session_id: The session ID this cron job belongs to
             cron_expr: Cron expression string (supports 5-field, 6-field, and special formats)
             task_description: Description of the task to execute
             job_id: Optional job ID (for restore from disk)
@@ -180,12 +174,10 @@ class CronManager:
         if job_id is None:
             job_id = str(uuid.uuid4())
         
-        job = CronJob(job_id, session_id, cron_expr, task_description)
+        job = CronJob(job_id, cron_expr, task_description)
         
         async with self._lock:
-            if session_id not in self._jobs:
-                self._jobs[session_id] = {}
-            self._jobs[session_id][job.id] = job
+            self._jobs[job.id] = job
         
         # Calculate initial delay and create scheduled task
         next_delay = self._get_next_delay(cron_expr)
@@ -195,40 +187,33 @@ class CronManager:
         # Persist to disk
         await self._save_to_disk()
         
-        print(f"[CronManager] Added cron job {job.id} for session {session_id}: {cron_expr} -> {task_description}")
+        print(f"[CronManager] Added cron job {job.id}: {cron_expr} -> {task_description}")
         return job.id
     
-    async def del_cron(self, session_id: str, job_id: str) -> bool:
+    async def del_cron(self, job_id: str) -> bool:
         """
-        Delete a cron job by ID for a specific session.
+        Delete a cron job by ID.
         
         Args:
-            session_id: The session ID this cron job belongs to
             job_id: The job ID to delete
             
         Returns:
             True if deleted, False if not found
         """
         async with self._lock:
-            session_jobs = self._jobs.get(session_id)
-            if session_jobs is None:
-                return False
-            
-            job = session_jobs.get(job_id)
+            job = self._jobs.get(job_id)
             if job is None:
                 return False
             
             job._cancelled = True
             if job.task and not job.task.done():
                 job.task.cancel()
-            del session_jobs[job_id]
-            if not session_jobs:
-                del self._jobs[session_id]
+            del self._jobs[job_id]
         
         # Persist to disk
         await self._save_to_disk()
         
-        print(f"[CronManager] Deleted cron job {job_id} for session {session_id}")
+        print(f"[CronManager] Deleted cron job {job_id}")
         return True
     
     async def _run_cron_job(self, job: CronJob, initial_delay: float):
@@ -280,27 +265,22 @@ class CronManager:
             print(f"[CronManager] Cron job {job.id} coroutine cancelled")
             raise
     
-    async def list_crons(self, session_id: str) -> List[dict]:
+    async def list_crons(self) -> List[dict]:
         """
-        List all cron jobs for a specific session.
+        List all cron jobs.
         
-        Args:
-            session_id: The session ID to list jobs for
-            
         Returns:
             List of job info dicts
         """
         async with self._lock:
-            session_jobs = self._jobs.get(session_id, {})
             return [
                 {
                     "id": job.id,
-                    "session_id": job.session_id,
                     "cron_expr": job.cron_expr,
                     "task_description": job.task_description,
                     "running": job.task is not None and not job.task.done(),
                 }
-                for job in session_jobs.values()
+                for job in self._jobs.values()
             ]
     
     async def get_next_run(self, cron_expr: str, count: int = 1) -> List[datetime]:
@@ -339,13 +319,13 @@ class CronManager:
                 # Import agent_runner here to avoid circular import
                 from superagent import agent_runner
                 session = await self._session_manager.get_or_create_session(
-                    job.session_id, 
+                    CRON_SESSION_ID, 
                     create=True,
                     session_main=agent_runner
                 )
                 
                 if session is None:
-                    print(f"[CronManager] Session '{job.session_id}' not available for job {job.id}, attempt {attempt + 1}/3")
+                    print(f"[CronManager] Session '{CRON_SESSION_ID}' not available for job {job.id}, attempt {attempt + 1}/3")
                     await asyncio.sleep(0.5)
                     continue
                 
@@ -353,7 +333,7 @@ class CronManager:
                 if request is None:
                     content = [TextBlock(type="text", text=job.task_description)]
                     request = AgentRequest(
-                        session_id=job.session_id,
+                        session_id=CRON_SESSION_ID,
                         content=content,
                         deepresearch=False
                     )
@@ -371,7 +351,7 @@ class CronManager:
                 print(f"[CronManager] Failed to execute job {job.id} after 3 attempts")
                 return
             
-            print(f"[CronManager] Executing job {job.id} for session {job.session_id}: {job.task_description}")
+            print(f"[CronManager] Executing job {job.id} for session {CRON_SESSION_ID}: {job.task_description}")
             
             # Wait for response
             response_chunks = []
@@ -398,7 +378,7 @@ class CronManager:
             # Propagate cancellation
             if request_id:
                 try:
-                    session = await self._session_manager.get_or_create_session(job.session_id, create=False)
+                    session = await self._session_manager.get_or_create_session(CRON_SESSION_ID, create=False)
                     if session:
                         await session.cancel_request(request_id)
                 except Exception:
