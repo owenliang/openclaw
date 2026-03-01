@@ -68,6 +68,8 @@ graph TB
 
 ### 环境准备
 
+**Python 版本要求**：建议使用 Python 3.12 或以上版本（3.10 存在 asyncio bug [#45416](https://bugs.python.org/issue45416)）
+
 ```bash
 # 1. 安装依赖
 pip install -r requirements.txt
