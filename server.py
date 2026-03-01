@@ -8,6 +8,8 @@ from fastapi import Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from datamodel import AgentRequest, ChatRequest
 from superagent import create_agent_if_not_exists, sess_mgr
+from dotenv import load_dotenv
+import uvicorn
 
 @asynccontextmanager
 async def lifespan(app):
@@ -49,12 +51,16 @@ async def get_commands():
     
 @app.post("/chat")
 async def chat(request: ChatRequest):
+    queue_ok=False
     for _ in range(3):# 为session过期瞬间兜底
         sess = await create_agent_if_not_exists(request.session_id)
         agent_req=AgentRequest(session_id=request.session_id, content=request.content, deepresearch=request.deepresearch)
         if await sess.add_request(agent_req):
+            queue_ok=True
             break
         await asyncio.sleep(0.5)
+    if not queue_ok:
+        return {"error": "queue_error"}
 
     async def event_generator():
         yield f"data: {json.dumps({'request_id': agent_req.id})}\n\n"   # 首先发送request_id
@@ -75,5 +81,5 @@ async def stop(session_id: str,request_id: str):
     return {"status": "canceled", "session_id": session_id, "request_id": request_id}
 
 if __name__ == "__main__":
-    import uvicorn
+    load_dotenv()
     uvicorn.run(app, host="0.0.0.0", port=8000)
