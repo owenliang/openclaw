@@ -7,10 +7,26 @@ from agentscope.tool import Toolkit
 from fastapi import Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from datamodel import AgentRequest, ChatRequest
 from superagent import create_agent_if_not_exists, sess_mgr, cron_mgr, load_agent_states
 from dotenv import load_dotenv
 import uvicorn
+
+class AuthMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        if os.environ.get("SERVER_API_AUTH", "").lower() == "true":
+            token = None
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header and auth_header.lower().startswith("bearer "):
+                token = auth_header[7:].strip()
+            if token is None:
+                token = request.query_params.get("token", "").strip()
+            if not token:
+                return Response(status_code=401, content="Missing or invalid Authorization header")
+            if token != os.environ.get("SERVER_API_TOKEN", ""):
+                return Response(status_code=403, content="Invalid token")
+        return await call_next(request)
 
 @asynccontextmanager
 async def lifespan(app):
@@ -21,6 +37,9 @@ async def lifespan(app):
         yield
 
 app=fastapi.FastAPI(lifespan=lifespan)
+
+# 配置认证中间件
+app.add_middleware(AuthMiddleware)
 
 # 配置 CORS
 app.add_middleware(

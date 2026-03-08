@@ -216,7 +216,17 @@ pip install -r requirements.txt
 # 2. 配置环境变量
 # 创建 .env 文件，填入：
 DASHSCOPE_API_KEY=your_api_key_here
+
+# 可选：启用 API 鉴权（默认关闭）
+SERVER_API_AUTH=true
+SERVER_API_TOKEN=your_secret_token
 ```
+
+**API 鉴权说明**：
+- 不设置 `SERVER_API_AUTH` 或设置为 `false` 时，默认不启用鉴权
+- 设置 `SERVER_API_AUTH=true` 后，所有 API 接口需要携带 `Authorization: Bearer <token>` 请求头
+- Token 值由 `SERVER_API_TOKEN` 环境变量指定
+- 未携带或错误的 Token 将返回 401/403 状态码
 
 ### 启动服务
 

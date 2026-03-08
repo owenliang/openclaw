@@ -1517,8 +1517,7 @@
     <div id="root"></div>
     
     <!-- 背景音乐 -->
-    <audio id="bgm" loop preload="auto">
-        <source src="/music/jay-xingqing.mp4" type="audio/mp4">
+    <audio id="bgm" loop preload="none">
         您的浏览器不支持音频播放。
     </audio>
     <script>
@@ -1543,6 +1542,13 @@
                 musicStatus.textContent = '已暂停';
                 isPlaying = false;
             } else {
+                // 首次播放时设置音频源
+                if (!bgm.src) {
+                    const params = new URLSearchParams(window.location.search);
+                    const token = params.get('token');
+                    const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+                    bgm.src = `/music/jay-xingqing.mp4${tokenParam}`;
+                }
                 bgm.play().catch(e => {
                     console.log('音频播放失败:', e);
                     playPauseBtn.textContent = '▶';
@@ -1898,6 +1904,12 @@
                 console.log('生成新的 session_id:', newSessionId);
                 return newSessionId;
             });
+
+            // 从 URL 获取 token 参数
+            const urlTokenRef = useRef((() => {
+                const params = new URLSearchParams(window.location.search);
+                return params.get('token');
+            })());
             const [messages, setMessages] = useState([]);
             const [inputText, setInputText] = useState('');
             const [isLoading, setIsLoading] = useState(false);
@@ -1935,7 +1947,8 @@
                 const fetchSkills = async () => {
                     try {
                         console.log('开始获取技能列表...');
-                        const response = await fetch('/get_commands');
+                        const tokenParam = urlTokenRef.current ? `?token=${encodeURIComponent(urlTokenRef.current)}` : '';
+                        const response = await fetch(`/get_commands${tokenParam}`);
                         console.log('技能接口响应状态:', response.status);
                         if (response.ok) {
                             const data = await response.json();
@@ -1967,7 +1980,8 @@
                 const fetchHistory = async () => {
                     try {
                         console.log('正在加载历史对话，session_id:', sessionId);
-                        const response = await fetch(`/history?session_id=${sessionId}`);
+                        const tokenParam = urlTokenRef.current ? `&token=${encodeURIComponent(urlTokenRef.current)}` : '';
+                        const response = await fetch(`/history?session_id=${sessionId}${tokenParam}`);
                         if (response.ok) {
                             const data = await response.json();
                             console.log('历史对话数据:', data);
@@ -2186,11 +2200,12 @@
             const fetchCronHistory = async () => {
                 setCronLoading(true);
                 try {
-                    const response = await fetch('/history?session_id=cronjob');
+                    const tokenParam = urlTokenRef.current ? `&token=${encodeURIComponent(urlTokenRef.current)}` : '';
+                    const response = await fetch(`/history?session_id=cronjob${tokenParam}`);
                     if (response.ok) {
                         const data = await response.json();
                         if (data.status === 'success' && data.history) {
-                            setCronHistory(data.history);
+                            setCronHistory(data.history.slice(-20));
                         } else {
                             setCronHistory([]);
                         }
@@ -2209,7 +2224,8 @@
             const fetchCronJobs = async () => {
                 setCronJobsLoading(true);
                 try {
-                    const response = await fetch('/get_crons');
+                    const tokenParam = urlTokenRef.current ? `?token=${encodeURIComponent(urlTokenRef.current)}` : '';
+                    const response = await fetch(`/get_crons${tokenParam}`);
                     console.log('获取 Cron 任务列表响应:', response.status);
                     if (response.ok) {
                         const data = await response.json();
@@ -2261,7 +2277,8 @@
             const stopGeneration = async () => {
                 if (!currentRequestIdRef.current) return;
                 try {
-                    const response = await fetch(`/stop?session_id=${encodeURIComponent(sessionId)}&request_id=${encodeURIComponent(currentRequestIdRef.current)}`);
+                    const tokenParam = urlTokenRef.current ? `&token=${encodeURIComponent(urlTokenRef.current)}` : '';
+                    const response = await fetch(`/stop?session_id=${encodeURIComponent(sessionId)}&request_id=${encodeURIComponent(currentRequestIdRef.current)}${tokenParam}`);
                     if (response.ok) {
                         console.log('已成功发送打断请求');
                         abortRef.current = true;
@@ -2442,11 +2459,15 @@
                 setIsWaitingRequestId(true);
 
                 try {
+                    const headers = {
+                        'Content-Type': 'application/json'
+                    };
+                    if (urlTokenRef.current) {
+                        headers['Authorization'] = `Bearer ${urlTokenRef.current}`;
+                    }
                     const response = await fetch('/chat', {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json'
-                        },
+                        headers: headers,
                         body: JSON.stringify({
                             session_id: sessionId,
                             content: contentList,
