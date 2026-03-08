@@ -6,6 +6,7 @@ import fastapi
 from agentscope.tool import Toolkit
 from fastapi import Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
+from fastapi.middleware.cors import CORSMiddleware
 from datamodel import AgentRequest, ChatRequest
 from superagent import create_agent_if_not_exists, sess_mgr, cron_mgr, load_agent_states
 from dotenv import load_dotenv
@@ -20,6 +21,15 @@ async def lifespan(app):
         yield
 
 app=fastapi.FastAPI(lifespan=lifespan)
+
+# 配置 CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 async def index():
