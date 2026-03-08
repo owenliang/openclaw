@@ -1,6 +1,11 @@
-# AgentScope 智能聊天助手
+# AgentScope 小龙虾
 
-![界面预览](assets/image/image.png)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-blue?logo=github)](https://github.com/owenliang/openclaw)
+[![Bilibili](https://img.shields.io/badge/Bilibili-哔哩哔哩-pink?logo=bilibili)](https://space.bilibili.com/288748846)
+
+![添加定时任务](assets/image/addcron.png)
+
+![查看定时任务执行日志](assets/image/listcron.png)
 
 ## 1. 技术栈
 
@@ -34,10 +39,22 @@ graph TB
     subgraph "前端层"
         UI[React UI]
         ThreeJS[Three.js 3D背景]
+        TabChat[对话 Tab]
+        TabCron[定时任务 Tab]
+        UI --> TabChat
+        UI --> TabCron
     end
 
     subgraph "API层"
         FastAPI[FastAPI Server]
+        ChatEP[/chat 对话接口/]
+        StopEP[/stop 停止接口/]
+        HistoryEP[/history 历史接口/]
+        SkillsEP[/get_skills 技能接口/]
+        FastAPI --> ChatEP
+        FastAPI --> StopEP
+        FastAPI --> HistoryEP
+        FastAPI --> SkillsEP
     end
 
     subgraph "会话管理层 SessionManager"
@@ -72,18 +89,22 @@ graph TB
     end
 
     subgraph "定时任务层 CronManager"
-        CronMgr[CronManager]
+        CronMgr[CronManager 单例]
         CronJob1[CronJob]
         CronJob2[CronJob]
         CronSession[Session: cronjob]
+        CronPersistence[(jobs.json 持久化)]
         CronMgr -->|调度| CronJob1
         CronMgr -->|调度| CronJob2
+        CronMgr -->|持久化| CronPersistence
         CronJob1 -.->|触发请求| CronSession
         CronJob2 -.->|触发请求| CronSession
     end
 
-    UI -->|SSE 流式| FastAPI
-    FastAPI -->|get_or_create_session| SessionMgr
+    TabChat -->|SSE 流式| ChatEP
+    TabCron -->|轮询| HistoryEP
+    ChatEP -->|get_or_create_session| SessionMgr
+    HistoryEP -->|get_session| SessionMgr
     SessionMgr -->|agent_runner| ReAct
     SessionMgr -->|agent_runner| CronSession
     ReAct -->|加载| Skills
@@ -97,7 +118,41 @@ graph TB
     MCP -->|长连接| MCPState2
 ```
 
-## 4. 运行方法
+## 4. 定时任务功能
+
+AgentScope 内置完整的定时任务调度系统，通过 `CronManager` 单例统一管理所有定时任务。
+
+### 4.1 功能特性
+
+| 特性 | 说明 |
+|------|------|
+| **秒级精度** | 支持 6 字段 cron 表达式（秒 分 时 日 月 周） |
+| **持久化存储** | 任务自动保存到 `jobs.json`，重启后自动恢复 |
+| **隔离执行** | 所有定时任务在专用 `cronjob` session 中执行 |
+| **实时观察** | 前端「定时任务」Tab 实时查看执行历史和对话内容 |
+| **自动滚动** | 新消息自动滚动到底部，支持手动回滚查看历史 |
+
+### 4.2 Cron 表达式格式
+
+支持标准 5 字段和扩展 6 字段格式：
+
+| 格式 | 示例 | 说明 |
+|------|------|------|
+| 6 字段 | `*/30 * * * * *` | 每 30 秒执行 |
+| 6 字段 | `0 */5 * * * *` | 每 5 分钟执行（整秒） |
+| 5 字段 | `*/5 * * * *` | 每 5 分钟执行 |
+| 特殊表达式 | `@hourly` | 每小时执行 |
+| 特殊表达式 | `@daily` | 每天执行 |
+
+### 4.3 相关工具
+
+| 工具名称 | 功能 |
+|---------|------|
+| `add_cron` | 添加定时任务，支持秒级精度 |
+| `del_cron` | 删除指定定时任务 |
+| `list_crons` | 列出所有定时任务 |
+
+## 5. 运行方法
 
 ### 环境准备
 
@@ -150,21 +205,38 @@ python server.py
 | Playwright-MCP | 有状态/stdio | 浏览器自动化控制 |
 | Bazi-MCP | 无状态/SSE | 八字算命服务 |
 
+### API 接口列表
+
+| 接口路径 | 方法 | 功能描述 |
+|---------|------|---------|
+| `/` | GET | 主页，返回 chat.html |
+| `/chat` | POST | 对话接口，SSE 流式返回 |
+| `/stop` | GET | 停止指定请求 |
+| `/history` | GET | 获取会话历史记录 |
+| `/get_skills` | GET | 获取可用技能列表 |
+| `/get_commands` | GET | 获取可用命令/工具列表 |
+| `/music/{filename}` | GET | 音乐文件服务 |
+
 ### 项目结构
 
 ```
 .
-├── server.py           # FastAPI 主服务
-├── superagent.py       # Agent 核心逻辑
-├── tools.py            # 工具函数
-├── model.py            # 模型定义
-├── datamodel.py        # 数据模型
-├── session.py          # 会话管理
-├── cron_manager.py     # 定时任务管理
-├── chat.html           # 前端页面
+├── server.py              # FastAPI 主服务
+├── superagent.py          # Agent 核心逻辑 (ReActAgent)
+├── tools.py               # 工具函数与注册
+├── model.py               # 模型配置 (DashScope)
+├── datamodel.py           # 数据模型定义
+├── session.py             # 会话管理 (GlobalSessionManager)
+├── cron_manager.py        # 定时任务管理 (CronManager 单例)
+├── chat.html              # 前端页面 (React + Three.js)
+├── cronjob.json           # 定时任务持久化文件
+├── sessions/              # 会话状态存储目录
 ├── assets/
-│   └── image/          # 图片资源
-└── .agents/skills/     # 技能插件目录
+│   ├── image/             # 截图资源
+│   │   ├── addcron.png    # 添加任务截图
+│   │   └── listcron.png   # 任务列表截图
+│   └── music/             # 音乐资源
+└── .agents/skills/        # 技能插件目录
     ├── find-skills/
     ├── python-code-review/
     └── xlsx/

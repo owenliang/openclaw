@@ -3,6 +3,7 @@ import uuid
 from typing import List
 from pydantic import BaseModel
 from agentscope.message import ImageBlock, Msg, TextBlock 
+from agentscope.memory import MemoryBase
 
 class ChatRequest(BaseModel):
     session_id: str
@@ -27,3 +28,8 @@ class AgentRequest:
                 await self.stream_task
             except:
                 pass
+
+class AgentStates:
+    def __init__(self, session_id: str, memory: MemoryBase):
+        self.session_id = session_id
+        self.memory = memory

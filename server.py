@@ -7,7 +7,7 @@ from agentscope.tool import Toolkit
 from fastapi import Request
 from fastapi.responses import FileResponse, Response, StreamingResponse
 from datamodel import AgentRequest, ChatRequest
-from superagent import create_agent_if_not_exists, sess_mgr, cron_mgr
+from superagent import create_agent_if_not_exists, sess_mgr, cron_mgr, load_agent_states
 from dotenv import load_dotenv
 import uvicorn
 
@@ -51,6 +51,10 @@ async def get_commands():
     skills_list = list(toolkit.skills.values())
     return {"skills": skills_list}
 
+@app.get("/get_crons")
+async def get_crons():
+    return await cron_mgr.list_crons()
+
 @app.post("/chat")
 async def chat(request: ChatRequest):
     queue_ok=False
@@ -81,6 +85,14 @@ async def stop(session_id: str,request_id: str):
         return {"status": "session not exists", "session_id": session_id, "request_id": request_id}
     await sess.cancel_request(request_id)
     return {"status": "canceled", "session_id": session_id, "request_id": request_id}
+
+@app.get('/history')
+async def history(session_id: str):
+    states=await load_agent_states(session_id)
+    if states is None:
+        return {"status": "session not exists", "session_id": session_id}
+    history=await states.memory.get_memory()
+    return {"status": "success", "session_id": session_id, "history": history}
 
 if __name__ == "__main__":
     load_dotenv()

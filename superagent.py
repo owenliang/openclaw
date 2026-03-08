@@ -15,6 +15,7 @@ from model import OpenAIChatModelCached, VLTokenCounter
 from session import Session, GlobalSessionManager, SessionStatus
 from tools import build_agent_toolkit, build_subagent_tool, FLAGS, AGENT_SYS_PROMPT, SUBAGENT_PROMPT
 from cron_manager import CronManager
+from datamodel import AgentStates
 
 sess_mgr = GlobalSessionManager(expires=60, enable_sandbox=FLAGS["enable_sandbox"])
 cron_mgr = CronManager(sess_mgr)
@@ -155,3 +156,14 @@ async def agent_runner(sess: Session):
 async def create_agent_if_not_exists(session_id: str) -> Session:
     sess=await sess_mgr.get_or_create_session(session_id,create=True,session_main=agent_runner)
     return sess
+
+#### services
+async def load_agent_states(session_id: str) -> AgentStates|None:
+    session=JSONSession(save_dir="./sessions")
+
+    memory=InMemoryMemory()
+    try:
+        await session.load_session_state(session_id=session_id,allow_not_exist=False,memory=memory) 
+    except Exception as e:
+        return None
+    return AgentStates(session_id=session_id, memory=memory)

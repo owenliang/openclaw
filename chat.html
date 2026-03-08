@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AgentScope -- Alibaba</title>
+    <title>agentscope小龙虾</title>
     <script crossorigin src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone@7.21.4/babel.min.js"></script>
@@ -64,8 +64,8 @@
         }
 
         .chat-container {
-            width: 100%;
-            max-width: 900px;
+            width: 80%;
+            max-width: 1400px;
             height: 90vh;
             background: rgba(255, 255, 255, 0.95);
             border-radius: 12px;
@@ -138,10 +138,57 @@
             margin-left: 40px;
         }
 
+        .chat-header-links {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .chat-header-links a {
+            color: white;
+            text-decoration: none;
+            font-size: 13px;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            transition: all 0.2s;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+
+        .chat-header-links a:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
         .chat-header-left h1 {
             font-size: 20px;
             font-weight: 500;
             letter-spacing: 0.5px;
+        }
+
+        .chat-title-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header-links-inline {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .header-links-inline a {
+            display: flex;
+            transition: transform 0.2s;
+        }
+
+        .header-links-inline a:hover {
+            transform: translateY(-2px);
+        }
+
+        .header-links-inline img {
+            height: 20px;
         }
 
         .new-chat-button {
@@ -1041,6 +1088,278 @@
             background: white;
             border-radius: 2px;
         }
+
+        /* Tab 切换样式 */
+        .tab-container {
+            display: flex;
+            border-bottom: 1px solid #e8e8e8;
+            background: #fafafa;
+        }
+
+        .tab-button {
+            flex: 1;
+            padding: 12px 24px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .tab-button:hover {
+            color: #1890ff;
+            background: #f0f0f0;
+        }
+
+        .tab-button.active {
+            color: #1890ff;
+            font-weight: 500;
+        }
+
+        .tab-button.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #1890ff;
+        }
+
+        /* Cron 观察窗口样式 */
+        .cron-messages {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            background: #f5f5f5;
+        }
+
+        .cron-empty-state {
+            text-align: center;
+            color: #999;
+            padding: 60px 20px;
+        }
+
+        .cron-empty-state .icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+
+        .cron-message {
+            display: flex;
+            flex-direction: column;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease-in;
+        }
+
+        .cron-message.user {
+            align-self: flex-end;
+        }
+
+        .cron-message.assistant {
+            align-self: flex-start;
+        }
+
+        .cron-message.system {
+            align-self: center;
+            max-width: 95%;
+        }
+
+        .cron-message-bubble {
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+
+        .cron-message.user .cron-message-bubble {
+            background: linear-gradient(135deg, #0064c8 0%, #1890ff 100%);
+            color: white;
+        }
+
+        .cron-message.assistant .cron-message-bubble {
+            background: white;
+            color: #333;
+            border: 1px solid #e8e8e8;
+        }
+
+        .cron-message.system .cron-message-bubble {
+            background: #fffbe6;
+            color: #666;
+            border: 1px solid #ffe58f;
+            font-size: 12px;
+        }
+
+        .cron-message-time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+            padding: 0 4px;
+        }
+
+        .cron-message.user .cron-message-time {
+            text-align: right;
+        }
+
+        .cron-refresh-indicator {
+            position: absolute;
+            top: 10px;
+            right: 20px;
+            font-size: 12px;
+            color: #999;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .cron-refresh-indicator.refreshing::before {
+            content: '';
+            width: 12px;
+            height: 12px;
+            border: 2px solid #e8e8e8;
+            border-top-color: #1890ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .cron-header-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .cron-status-badge {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            background: #52c41a;
+            color: white;
+        }
+
+        .cron-status-badge.inactive {
+            background: #999;
+        }
+
+        /* Cron 消息中的 tool_use/tool_result 样式 - 与对话tab保持一致 */
+        .cron-message .message-content-item {
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 6px;
+        }
+
+        .cron-message .message-content-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .cron-message .message-content-item.tool_use {
+            background: rgba(255, 152, 0, 0.1);
+            color: #e65100;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            cursor: pointer;
+            transition: background 0.2s;
+            border-left: 3px solid #ff9800;
+            position: relative;
+        }
+
+        .cron-message .message-content-item.tool_use:hover {
+            background: rgba(255, 152, 0, 0.15);
+        }
+
+        .cron-message .message-content-item.tool_result {
+            background: rgba(76, 175, 80, 0.1);
+            color: #2e7d32;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin-left: 16px;
+            border-left: 3px solid #4caf50;
+            max-height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+        }
+
+        .cron-message .tool-use-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cron-message .tool-use-toggle {
+            font-size: 12px;
+            transition: transform 0.2s;
+        }
+
+        .cron-message .tool-use-toggle.expanded {
+            transform: rotate(90deg);
+        }
+
+        /* 对话滚动到底部按钮 - 固定在对话框右侧边缘外 */
+        .scroll-to-bottom {
+            position: fixed;
+            bottom: 140px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #1890ff;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            z-index: 100;
+            transition: all 0.2s;
+        }
+
+        .scroll-to-bottom:hover {
+            background: #40a9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        /* Cron 滚动到底部按钮 - 固定在对话框右侧边缘外 */
+        .cron-scroll-to-bottom {
+            position: fixed;
+            bottom: 100px;
+            right: 10px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #1890ff;
+            color: white;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .cron-scroll-to-bottom:hover {
+            background: #40a9ff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .cron-scroll-to-bottom:active {
+            transform: translateY(0);
+        }
     </style>
 </head>
 <body>
@@ -1400,10 +1719,24 @@
 
         // 配置 marked
         if (typeof marked !== 'undefined') {
+            // 使用 marked v4+ 的 mangle 和 headerIds 选项
             marked.setOptions({
                 breaks: true,
-                gfm: true
+                gfm: true,
+                mangle: false,
+                headerIds: false
             });
+            
+            // 通过修改原型链让链接在新标签页打开（兼容所有版本）
+            if (marked.Renderer) {
+                const markedRenderer = new marked.Renderer();
+                const originalLink = markedRenderer.link.bind(markedRenderer);
+                markedRenderer.link = function(href, title, text) {
+                    const html = originalLink(href, title, text);
+                    return html.replace(/^<a /, '<a target="_blank" rel="noopener noreferrer" ');
+                };
+                marked.setOptions({ renderer: markedRenderer });
+            }
         }
 
         // 生成 UUID v4
@@ -1416,7 +1749,18 @@
         }
 
         function ChatApp() {
-            const [sessionId] = useState(() => generateUUID());
+            // 从 localStorage 读取或生成新的 session_id
+            const [sessionId] = useState(() => {
+                const savedSessionId = localStorage.getItem('agentscope_session_id');
+                if (savedSessionId) {
+                    console.log('从 localStorage 恢复 session_id:', savedSessionId);
+                    return savedSessionId;
+                }
+                const newSessionId = generateUUID();
+                localStorage.setItem('agentscope_session_id', newSessionId);
+                console.log('生成新的 session_id:', newSessionId);
+                return newSessionId;
+            });
             const [messages, setMessages] = useState([]);
             const [inputText, setInputText] = useState('');
             const [isLoading, setIsLoading] = useState(false);
@@ -1436,6 +1780,14 @@
             const fileInputRef = useRef(null); // 文件输入引用
             const userScrolledRef = useRef(false); // 跟踪用户是否主动滚动
             const isAutoScrollingRef = useRef(false); // 跟踪是否正在自动滚动
+            const [showScrollButton, setShowScrollButton] = useState(false); // 是否显示滚动到底部按钮
+
+            // Cron 观察窗口状态
+            const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'cron'
+            const [cronHistory, setCronHistory] = useState([]);
+            const [cronLoading, setCronLoading] = useState(false);
+            const [cronLastRefresh, setCronLastRefresh] = useState(null);
+            const cronRefreshIntervalRef = useRef(null);
 
             // 加载技能列表
             useEffect(() => {
@@ -1468,6 +1820,29 @@
                 };
                 fetchSkills();
             }, []);
+
+            // 页面加载时拉取历史对话
+            useEffect(() => {
+                const fetchHistory = async () => {
+                    try {
+                        console.log('正在加载历史对话，session_id:', sessionId);
+                        const response = await fetch(`/history?session_id=${sessionId}`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            console.log('历史对话数据:', data);
+                            if (data.history && Array.isArray(data.history)) {
+                                // 直接使用后端返回的历史消息格式，与定时任务tab保持一致
+                                setMessages(data.history);
+                            }
+                        } else {
+                            console.error('获取历史对话失败，状态码:', response.status);
+                        }
+                    } catch (error) {
+                        console.error('加载历史对话失败:', error);
+                    }
+                };
+                fetchHistory();
+            }, [sessionId]);
 
             // 监听 isLoading 变化，当回复完成且有排队请求时自动发送
             useEffect(() => {
@@ -1585,6 +1960,8 @@
                         isAutoScrollingRef.current = false;
                     }, 600);
                 }
+                userScrolledRef.current = false;
+                setShowScrollButton(false);
             };
 
             // 流式返回过程中自动滚动
@@ -1597,6 +1974,14 @@
                 }
             }, [messages, currentPlan]);
 
+            // 切换到对话 tab 时滚动到底部
+            useEffect(() => {
+                if (activeTab === 'chat') {
+                    userScrolledRef.current = false;
+                    scrollToBottom();
+                }
+            }, [activeTab]);
+
             const handleScroll = () => {
                 const container = messagesContainerRef.current;
                 if (!container) return;
@@ -1607,17 +1992,67 @@
                 const { scrollTop, scrollHeight, clientHeight } = container;
                 const distanceToBottom = scrollHeight - scrollTop - clientHeight;
                 
-                // 如果距离底部超过100px，认为用户主动向上滚动
-                if (distanceToBottom > 100) {
+                // 如果距离底部超过50px，显示滚动按钮并认为用户主动向上滚动
+                const shouldShow = distanceToBottom > 50;
+                setShowScrollButton(shouldShow);
+                if (shouldShow) {
                     userScrolledRef.current = true;
                     console.log('用户向上滚动，停止自动跟随');
                 }
             };
 
+
+
             // 用于标记是否已打断，忽略后续消息
             const abortRef = useRef(false);
 
             const currentRequestIdRef = useRef(null);
+
+            // 获取 Cron 历史数据
+            const fetchCronHistory = async () => {
+                setCronLoading(true);
+                try {
+                    const response = await fetch('/history?session_id=cronjob');
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.status === 'success' && data.history) {
+                            setCronHistory(data.history);
+                        } else {
+                            setCronHistory([]);
+                        }
+                    } else {
+                        console.error('获取 Cron 历史失败:', response.status);
+                    }
+                } catch (error) {
+                    console.error('获取 Cron 历史错误:', error);
+                } finally {
+                    setCronLoading(false);
+                    setCronLastRefresh(new Date());
+                }
+            };
+
+            // 管理 Cron 定时刷新
+            useEffect(() => {
+                if (activeTab === 'cron') {
+                    // 立即获取一次
+                    fetchCronHistory();
+                    // 每 5 秒刷新
+                    cronRefreshIntervalRef.current = setInterval(fetchCronHistory, 5000);
+                } else {
+                    // 离开 cron tab 时清除定时器
+                    if (cronRefreshIntervalRef.current) {
+                        clearInterval(cronRefreshIntervalRef.current);
+                        cronRefreshIntervalRef.current = null;
+                    }
+                }
+
+                return () => {
+                    if (cronRefreshIntervalRef.current) {
+                        clearInterval(cronRefreshIntervalRef.current);
+                        cronRefreshIntervalRef.current = null;
+                    }
+                };
+            }, [activeTab]);
 
             const stopGeneration = async () => {
                 if (!currentRequestIdRef.current) return;
@@ -1998,14 +2433,239 @@
             // 查找指定 tool_use_id 对应的 tool_result
             const findToolResult = (toolUseId) => {
                 for (const msg of messages) {
-                    if (msg.role === 'assistant' && msg.contents) {
-                        const toolResult = msg.contents.find(
-                            item => item.type === 'tool_result' && item.tool_use_id === toolUseId
-                        );
-                        if (toolResult) return toolResult;
-                    }
+                    const contents = Array.isArray(msg.contents) ? msg.contents : 
+                                    (Array.isArray(msg.content) ? msg.content : []);
+                    const toolResult = contents.find(
+                        item => item.type === 'tool_result' && (item.tool_use_id === toolUseId || item.id === toolUseId)
+                    );
+                    if (toolResult) return toolResult;
                 }
                 return null;
+            };
+
+            // 格式化时间戳
+            const formatTime = (timestamp) => {
+                if (!timestamp) return '';
+                const date = new Date(timestamp);
+                return date.toLocaleString('zh-CN', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    second: '2-digit'
+                });
+            };
+
+            // Cron 观察窗口：展开/折叠状态管理
+            const [cronExpandedToolIds, setCronExpandedToolIds] = useState(new Set());
+
+            // Cron 消息容器引用和滚动状态
+            const cronMessagesRef = useRef(null);
+            const [cronShowScrollButton, setCronShowScrollButton] = useState(false);
+            const cronUserScrolledRef = useRef(false);
+
+            // Cron 滚动到底部
+            const scrollCronToBottom = () => {
+                if (cronMessagesRef.current) {
+                    cronMessagesRef.current.scrollTop = cronMessagesRef.current.scrollHeight;
+                    cronUserScrolledRef.current = false;
+                    setCronShowScrollButton(false);
+                }
+            };
+
+            // Cron 滚动事件处理
+            const handleCronScroll = () => {
+                const container = cronMessagesRef.current;
+                if (!container) return;
+
+                const { scrollTop, scrollHeight, clientHeight } = container;
+                const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+
+                // 如果距离底部超过 50px，显示滚动按钮
+                const shouldShow = distanceToBottom > 50;
+                setCronShowScrollButton(shouldShow);
+                if (shouldShow) {
+                    cronUserScrolledRef.current = true;
+                }
+            };
+
+            // 检查是否需要显示滚动按钮（内容高度超过容器）
+            const checkCronScrollButton = () => {
+                const container = cronMessagesRef.current;
+                if (!container) return;
+                const { scrollHeight, clientHeight } = container;
+                const hasScrollableContent = scrollHeight > clientHeight + 50;
+                // 只有在有内容且不在底部时才显示按钮
+                if (hasScrollableContent) {
+                    const { scrollTop } = container;
+                    const distanceToBottom = scrollHeight - scrollTop - clientHeight;
+                    setCronShowScrollButton(distanceToBottom > 50);
+                } else {
+                    setCronShowScrollButton(false);
+                }
+            };
+
+            // Cron 数据更新时自动滚动到底部（如果用户没有主动向上滚动）
+            useEffect(() => {
+                if (activeTab === 'cron' && !cronUserScrolledRef.current) {
+                    scrollCronToBottom();
+                }
+            }, [cronHistory, activeTab]);
+
+            // 切换到定时任务 Tab 时检查是否需要显示滚动按钮
+            useEffect(() => {
+                if (activeTab === 'cron') {
+                    // 延迟检查，等待渲染完成
+                    const timer = setTimeout(() => {
+                        checkCronScrollButton();
+                    }, 100);
+                    return () => clearTimeout(timer);
+                }
+            }, [activeTab, cronHistory]);
+
+            // 切换 Cron tool_use 展开状态
+            const toggleCronToolUse = (toolUseId) => {
+                setCronExpandedToolIds(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(toolUseId)) {
+                        newSet.delete(toolUseId);
+                    } else {
+                        newSet.add(toolUseId);
+                    }
+                    return newSet;
+                });
+            };
+
+            // 在 Cron 历史查找 tool_result（与对话 tab 保持一致，不限制 role）
+            const findCronToolResult = (history, toolUseId) => {
+                for (const msg of history) {
+                    const contents = Array.isArray(msg.content) ? msg.content : 
+                                    (Array.isArray(msg.contents) ? msg.contents : []);
+                    const toolResult = contents.find(
+                        item => item.type === 'tool_result' && (item.tool_use_id === toolUseId || item.id === toolUseId)
+                    );
+                    if (toolResult) return toolResult;
+                }
+                return null;
+            };
+
+            // 提取文本内容
+            const extractTextContent = (content) => {
+                if (typeof content === 'string') return content;
+                if (Array.isArray(content)) {
+                    return content
+                        .filter(item => item.type === 'text')
+                        .map(item => item.text)
+                        .join('\n');
+                }
+                if (typeof content === 'object' && content !== null) {
+                    if (content.text) return content.text;
+                    return JSON.stringify(content);
+                }
+                return '';
+            };
+
+            // 渲染 Cron 消息内容（参考对话 tab 逻辑）
+            const renderCronMessage = (msg, index, allHistory) => {
+                const role = msg.role || 'system';
+                const timestamp = msg.timestamp || msg.time;
+
+                // User 消息：简单渲染文本
+                if (role === 'user') {
+                    const text = extractTextContent(msg.content);
+                    return (
+                        <div key={index} className="cron-message user">
+                            <div className="cron-message-bubble">
+                                {text}
+                            </div>
+                            {timestamp && (
+                                <div className="cron-message-time">{formatTime(timestamp)}</div>
+                            )}
+                        </div>
+                    );
+                }
+
+                // System 消息（tool_result）：跳过，在 tool_use 处聚合展示
+                if (role === 'system') {
+                    return null;
+                }
+
+                // Assistant 消息：处理 content/contents 数组，聚合 tool_use 和 tool_result
+                const msgContent = Array.isArray(msg.contents) ? msg.contents :
+                                  (Array.isArray(msg.content) ? msg.content : []);
+                if (role === 'assistant' && msgContent.length > 0) {
+                    return (
+                        <div key={index} className="cron-message assistant">
+                            <div className="cron-message-bubble">
+                                {msgContent.map((item, idx) => {
+                                    // text 类型（兼容 item.text 和 item.content）
+                                    if (item.type === 'text') {
+                                        const textContent = item.text || item.content || '';
+                                        return (
+                                            <div key={idx} className="message-content-item text markdown-content"
+                                                dangerouslySetInnerHTML={{ __html: typeof marked !== 'undefined' ? marked.parse(textContent) : textContent }} />
+                                        );
+                                    }
+
+                                    // tool_use 类型：可展开，聚合展示 tool_result
+                                    if (item.type === 'tool_use') {
+                                        const toolUseId = item.tool_use_id || item.id;
+                                        const toolName = item.name || (item.content ? item.content.split(':')[0] : '未知工具');
+                                        // 提取入参
+                                        let toolInput = '';
+                                        if (item.input) {
+                                            toolInput = typeof item.input === 'string' ? item.input : JSON.stringify(item.input, null, 2);
+                                        } else if (item.content && item.content.includes(':')) {
+                                            const colonIndex = item.content.indexOf(':');
+                                            toolInput = item.content.substring(colonIndex + 1).trim();
+                                        }
+                                        const isExpanded = cronExpandedToolIds.has(toolUseId);
+                                        const toolResult = findCronToolResult(allHistory, toolUseId);
+
+                                        return (
+                                            <div key={toolUseId}>
+                                                <div
+                                                    className="message-content-item tool_use"
+                                                    onClick={() => toggleCronToolUse(toolUseId)}
+                                                    style={{ cursor: 'pointer' }}
+                                                >
+                                                    <div className="tool-use-header">
+                                                        <span className={`tool-use-toggle ${isExpanded ? 'expanded' : ''}`}>▶</span>
+                                                        <span>使用工具: {toolName}</span>
+                                                    </div>
+                                                    {toolInput && (
+                                                        <div className="tool-use-params" style={{ marginLeft: '20px', marginTop: '4px', fontSize: '12px', opacity: 0.8, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                                                            参数: {toolInput}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                {isExpanded && toolResult && (
+                                                    <div className="message-content-item tool_result">
+                                                        {extractTextContent(toolResult.output || toolResult.content)}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    }
+
+                                    return null;
+                                })}
+                            </div>
+                            {timestamp && (
+                                <div className="cron-message-time">{formatTime(timestamp)}</div>
+                            )}
+                        </div>
+                    );
+                }
+
+                // 默认渲染
+                const text = extractTextContent(msg.content);
+                return (
+                    <div key={index} className={`cron-message ${role}`}>
+                        <div className="cron-message-bubble">{text}</div>
+                        {timestamp && <div className="cron-message-time">{formatTime(timestamp)}</div>}
+                    </div>
+                );
             };
 
             return (
@@ -2013,61 +2673,147 @@
                     <div className="chat-container">
                         <div className="chat-header">
                             <div className="chat-header-left">
-                                <h1>AgentScope -- Alibaba</h1>
+                                <div className="chat-title-row">
+                                    <h1>agentscope小龙虾</h1>
+                                    <div className="header-links-inline">
+                                        <a href="https://github.com/owenliang/openclaw" target="_blank" rel="noopener noreferrer">
+                                            <img src="https://img.shields.io/badge/GitHub-Repository-blue?logo=github" alt="GitHub" />
+                                        </a>
+                                        <a href="https://space.bilibili.com/288748846" target="_blank" rel="noopener noreferrer">
+                                            <img src="https://img.shields.io/badge/Bilibili-哔哩哔哩-pink?logo=bilibili" alt="Bilibili" />
+                                        </a>
+                                    </div>
+                                </div>
                                 <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '4px' }}>
-                                    Session: {sessionId}
+                                    {activeTab === 'chat' ? `Session: ${sessionId}` : 'Session: cronjob'}
                                 </div>
                             </div>
-                            <button className="new-chat-button" onClick={() => window.location.reload()}>
+                            <button className="new-chat-button" onClick={() => {
+                                localStorage.removeItem('agentscope_session_id');
+                                window.location.reload();
+                            }}>
                                 + 新建对话
                             </button>
                         </div>
-                        
+
+                        {/* Tab 切换 */}
+                        <div className="tab-container">
+                            <button
+                                className={`tab-button ${activeTab === 'chat' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('chat')}
+                            >
+                                对话
+                            </button>
+                            <button
+                                className={`tab-button ${activeTab === 'cron' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('cron')}
+                            >
+                                定时任务
+                            </button>
+                        </div>
+
+                        {activeTab === 'chat' ? (
+                            <>
                         <div className="chat-messages" ref={messagesContainerRef} onScroll={handleScroll}>
-                        {messages.map((message, index) => (
+                        {messages.map((message, index) => {
+                            // 兼容多种格式：
+                            // - 后端历史消息: message.content 是数组
+                            // - 实时 assistant 消息: message.contents 是数组
+                            // - 实时 user 消息: message.content 是字符串
+                            const msgContent = Array.isArray(message.contents) ? message.contents :
+                                              (Array.isArray(message.content) ? message.content : []);
+                            return (
                             <div key={index} className={`message ${message.role}`}>
                                 <div className="message-bubble">
                                     {message.role === 'user' ? (
                                         <div>
-                                            <div>{message.content}</div>
-                                            {message.images && message.images.length > 0 && (
+                                            {/* 优先使用 content 字符串（实时消息），否则从数组提取 */}
+                                            <div>{typeof message.content === 'string' ? message.content : extractTextContent(msgContent)}</div>
+                                            {/* 提取图片 - 优先使用 images 数组（实时消息），否则从 content 数组提取 */}
+                                            {(message.images?.length > 0 || msgContent.filter(item => item.type === 'image').length > 0) && (
                                                 <div className="user-images">
-                                                    {message.images.map((imgSrc, idx) => (
+                                                    {message.images?.map((imgSrc, idx) => (
                                                         <img key={idx} src={imgSrc} alt={`上传图片 ${idx + 1}`} />
+                                                    ))}
+                                                    {msgContent.filter(item => item.type === 'image').map((item, idx) => (
+                                                        <img key={`c-${idx}`} src={item.source?.data || item.data} alt={`上传图片 ${idx + 1}`} />
                                                     ))}
                                                 </div>
                                             )}
                                         </div>
                                     ) : (
                                         <div>
-                                            {message.contents.map((item, idx) => {
+                                            {/* 对 msgContent 进行去重处理，相同 tool_use_id 只保留最后一个 */}
+                                            {(() => {
+                                                const seenToolUseIds = new Set();
+                                                const deduplicatedContent = [];
+                                                // 倒序遍历，保留最后一个
+                                                for (let i = msgContent.length - 1; i >= 0; i--) {
+                                                    const item = msgContent[i];
+                                                    if (item.type === 'tool_use') {
+                                                        const toolUseId = item.tool_use_id || item.id;
+                                                        if (!seenToolUseIds.has(toolUseId)) {
+                                                            seenToolUseIds.add(toolUseId);
+                                                            deduplicatedContent.unshift(item);
+                                                        }
+                                                    } else {
+                                                        deduplicatedContent.unshift(item);
+                                                    }
+                                                }
+                                                return deduplicatedContent;
+                                            })().map((item, idx) => {
                                                 // tool_result 不直接渲染，会在 tool_use 下方展示
                                                 if (item.type === 'tool_result') {
                                                     return null;
                                                 }
                                                 
-                                                // 对 text 类型使用 markdown 渲染
+                                                // 对 text 类型使用 markdown 渲染（兼容 item.text 和 item.content）
                                                 if (item.type === 'text' && typeof marked !== 'undefined') {
+                                                    const textContent = item.text || item.content || '';
                                                     return (
                                                         <div 
                                                             key={idx} 
                                                             className={`message-content-item ${item.type} markdown-content`}
-                                                            dangerouslySetInnerHTML={{ __html: marked.parse(item.content || '') }}
+                                                            dangerouslySetInnerHTML={{ __html: marked.parse(textContent) }}
                                                         />
                                                     );
                                                 }
                                                 
                                                 // tool_use 类型：可点击展开/折叠，展示对应的 tool_result
                                                 if (item.type === 'tool_use') {
-                                                    const toolUseId = item.tool_use_id;
+                                                    // 兼容两种格式：
+                                                    // - 实时消息: tool_use_id, content (包含名称和参数，格式: "tool_name: {json}")
+                                                    // - 后端历史: id, name, input
+                                                    const toolUseId = item.tool_use_id || item.id;
+                                                    const toolName = item.name || (item.content ? item.content.split(':')[0] : '未知工具');
+                                                    // 提取入参
+                                                    let toolInput = '';
+                                                    if (item.input) {
+                                                        toolInput = typeof item.input === 'string' ? item.input : JSON.stringify(item.input, null, 2);
+                                                    } else if (item.content && item.content.includes(':')) {
+                                                        const colonIndex = item.content.indexOf(':');
+                                                        toolInput = item.content.substring(colonIndex + 1).trim();
+                                                    }
                                                     const isExpanded = expandedToolUseIds.has(toolUseId);
-                                                    const toolResult = findToolResult(toolUseId);
+                                                    // 在整个消息列表中查找 tool_result（在 assistant 或 system 角色的消息中）
+                                                    let toolResult = null;
+                                                    for (const m of messages) {
+                                                        const contents = Array.isArray(m.contents) ? m.contents : 
+                                                                        (Array.isArray(m.content) ? m.content : []);
+                                                        const found = contents.find(c => 
+                                                            c.type === 'tool_result' && (c.tool_use_id === toolUseId || c.id === toolUseId)
+                                                        );
+                                                        if (found) {
+                                                            toolResult = found;
+                                                            break;
+                                                        }
+                                                    }
                                                     // 检查是否是最后一条消息且正在加载
                                                     const isLastMessage = index === messages.length - 1;
                                                     const showLoading = !toolResult && isLastMessage && isLoading;
                                                     
                                                     return (
-                                                        <div key={idx}>
+                                                        <div key={toolUseId}>
                                                             <div 
                                                                 className={`message-content-item ${item.type} ${showLoading ? 'loading' : ''}`}
                                                                 onClick={() => toggleToolUse(toolUseId)}
@@ -2076,12 +2822,17 @@
                                                                     <span className={`tool-use-toggle ${isExpanded ? 'expanded' : ''}`}>
                                                                         ▶
                                                                     </span>
-                                                                    <span>{item.content}</span>
+                                                                    <span>使用工具: {toolName}</span>
                                                                 </div>
+                                                                {toolInput && (
+                                                                    <div className="tool-use-params" style={{ marginLeft: '20px', marginTop: '4px', fontSize: '12px', opacity: 0.8, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+                                                                        参数: {toolInput}
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                             {isExpanded && toolResult && (
                                                                 <div className="message-content-item tool_result">
-                                                                    {toolResult.content}
+                                                                    {extractTextContent(toolResult.output || toolResult.content)}
                                                                 </div>
                                                             )}
                                                         </div>
@@ -2091,7 +2842,7 @@
                                                 // 其他类型保持原样
                                                 return (
                                                     <div key={idx} className={`message-content-item ${item.type}`}>
-                                                        {item.content}
+                                                        {item.text || item.content}
                                                     </div>
                                                 );
                                             })}
@@ -2104,8 +2855,19 @@
                                     )}
                                 </div>
                             </div>
-                        ))}
+                            );
+                        })}
                         <div ref={messagesEndRef} />
+                        {/* 滚动到底部按钮 */}
+                        {showScrollButton && (
+                            <button
+                                className="scroll-to-bottom"
+                                onClick={scrollToBottom}
+                                title="滚动到底部"
+                            >
+                                ↓
+                            </button>
+                        )}
                     </div>
 
                     {/* 深度研究开关 - 单独一行 */}
@@ -2228,9 +2990,41 @@
                             </button>
                         )}
                     </div>
+                            </>
+                        ) : (
+                            // Cron 观察窗口
+                            <div className="chat-messages" style={{ background: '#f5f5f5', position: 'relative' }} ref={cronMessagesRef} onScroll={handleCronScroll}>
+                                <div className={`cron-refresh-indicator ${cronLoading ? 'refreshing' : ''}`}>
+                                    {cronLastRefresh && (
+                                        <span>上次更新: {formatTime(cronLastRefresh)}</span>
+                                    )}
+                                </div>
+                                {cronHistory.length === 0 ? (
+                                    <div className="cron-empty-state">
+                                        <div className="icon">📋</div>
+                                        <div>暂无定时任务历史记录</div>
+                                        <div style={{ fontSize: '12px', marginTop: '8px', opacity: 0.7 }}>
+                                            系统将每 5 秒自动刷新
+                                        </div>
+                                    </div>
+                                ) : (
+                                    cronHistory.map((msg, index) => renderCronMessage(msg, index, cronHistory))
+                                )}
+                                {/* 滚动到底部按钮 */}
+                                {cronShowScrollButton && (
+                                    <button
+                                        className="cron-scroll-to-bottom"
+                                        onClick={scrollCronToBottom}
+                                        title="滚动到底部"
+                                    >
+                                        ↓
+                                    </button>
+                                )}
+                            </div>
+                        )}
                 </div>
-                
-                {currentPlan && renderPlan(currentPlan)}
+
+                {activeTab === 'chat' && currentPlan && renderPlan(currentPlan)}
             </>
             );
         }

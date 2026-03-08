@@ -141,7 +141,10 @@ class CronManager:
         try:
             normalized = self._normalize_cron_expr(cron_expr)
             now = datetime.now()
-            cron = croniter(normalized, now)
+            # Check if it's 6-field format (with seconds) to enable second-level precision
+            parts = normalized.split()
+            is_second_level = len(parts) == 6
+            cron = croniter(normalized, now, second_at_beginning=is_second_level)
             next_time = cron.get_next(datetime)
             delay = (next_time - now).total_seconds()
             # Ensure minimum delay of 0.1 seconds to avoid immediate execution
