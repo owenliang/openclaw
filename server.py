@@ -53,7 +53,8 @@ async def get_commands():
 
 @app.get("/get_crons")
 async def get_crons():
-    return await cron_mgr.list_crons()
+    jobs = await cron_mgr.list_crons()
+    return {"status": "success", "jobs": jobs}
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
