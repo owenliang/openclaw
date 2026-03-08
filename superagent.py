@@ -96,11 +96,17 @@ async def agent_runner(sess: Session):
                     trigger_threshold=600000,
                     keep_recent=5,
                     compression_model=OpenAIChatModel(
-                        model_name="qwen3.5-plus",
+                         # 百炼只有部分模型支持json schema: https://bailian.console.aliyun.com/cn-beijing/?spm=5176.29619931.J_PvCec88exbQTi-U433Fxg.4.74cd10d7jGKMNJ&tab=doc#/doc/?type=model&url=2862209
+                        model_name="qwen-plus",
                         api_key=os.environ["DASHSCOPE_API_KEY"],
                         stream=False,
                         client_kwargs={
                             'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+                        },
+                        generate_kwargs={
+                            'extra_body': {
+                                'enable_thinking': False,
+                            }
                         }
                     ),
                 ),
