@@ -333,6 +333,19 @@ async def build_agent_toolkit(sess: Session):
         agent_skill_instruction=f'''# Skills 使用指南
         你拥有若干预定义的技能（skill），每个技能都是一套完整的SOP流程，存放在独立目录中。
         
+        ## 存储位置
+        所有技能存储在 `.agent/skills/` 目录下，每个技能有独立的子目录。
+        
+        > 💡 **新增技能**：如需添加新技能，请将技能目录安装到 `.agent/skills/` 目录下。
+        
+        ## 合规格式
+        ```yaml
+        ---
+        name: 技能名称
+        description: 技能的详细描述，说明使用场景和用途
+        ---
+        ```
+        
         ## 使用流程
         1. **技能识别**：根据skill的name和description判断是否需要使用该技能
         2. **深入了解**：进入skill目录，详细阅读SKILL.md了解具体使用方法，此时你应该使用view_text_file
@@ -345,10 +358,10 @@ async def build_agent_toolkit(sess: Session):
         ''',
         agent_skill_template="- name: {name}  dir: {dir}  desc: {description}")
     # skills
-    for skill_dir in os.listdir(".agents/skills"):
-        if os.path.isdir(os.path.join(".agents/skills", skill_dir)):
+    for skill_dir in os.listdir(".agent/skills"):
+        if os.path.isdir(os.path.join(".agent/skills", skill_dir)):
             try:
-                toolkit.register_agent_skill(os.path.join(".agents/skills", skill_dir))
+                toolkit.register_agent_skill(os.path.join(".agent/skills", skill_dir))
             except BaseException as e:
                 print(f"Error registering skill {skill_dir}: {e}")
     # Tools

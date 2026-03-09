@@ -31,7 +31,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 @asynccontextmanager
 async def lifespan(app):
     async with sess_mgr:
-        os.makedirs(".agents/skills/",exist_ok=True)
+        os.makedirs(".agent/skills/",exist_ok=True)
         # Load persisted cron jobs on startup
         await cron_mgr.load_from_disk()
         yield
@@ -74,10 +74,10 @@ async def get_music(filename: str, request: Request):
 @app.get('/get_commands')
 async def get_commands():
     toolkit=Toolkit()
-    for skill_dir in os.listdir(".agents/skills"):
-        if os.path.isdir(os.path.join(".agents/skills", skill_dir)):
+    for skill_dir in os.listdir(".agent/skills"):
+        if os.path.isdir(os.path.join(".agent/skills", skill_dir)):
             try:
-                toolkit.register_agent_skill(os.path.join(".agents/skills", skill_dir))
+                toolkit.register_agent_skill(os.path.join(".agent/skills", skill_dir))
             except BaseException as e:
                 print(f"Error registering skill {skill_dir}: {e}")
     skills_list = list(toolkit.skills.values())

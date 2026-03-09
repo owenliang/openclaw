@@ -112,7 +112,7 @@ graph TB
 
     subgraph "技能层 Skills"
         Skills[Agent Skills]
-        SkillDir[.agents/skills/]
+        SkillDir[.agent/skills/]
         Skills --> SkillDir
     end
 
@@ -255,9 +255,8 @@ python server.py
 
 | 技能名称 | 目录 | 功能描述 |
 |---------|------|---------|
-| find-skills | .agents/skills/find-skills/ | 帮助用户发现和安装 Agent Skills，支持通过 `npx skills` 命令搜索和安装社区技能 |
-| python-code-review | .agents/skills/python-code-review/ | Python 代码审查，检查类型安全、异步模式、错误处理和常见错误 |
-| xlsx | .agents/skills/xlsx/ | Excel 文件处理，支持创建、编辑、分析 .xlsx/.csv 文件，包含 Office Open XML 验证和公式重算 |
+| find-skills | .agent/skills/find-skills/ | 帮助用户发现和安装 Agent Skills，支持通过 `npx skills` 命令搜索和安装社区技能 |
+| skill-creator | .agent/skills/skill-creator/ | 创建新技能、修改和优化现有技能，支持技能性能评估和描述优化 |
 
 ### MCP 集成
 
@@ -408,17 +407,12 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
     {
       "name": "find-skills",
       "description": "帮助用户发现和安装 Agent Skills",
-      "dir": ".agents/skills/find-skills"
+      "dir": ".agent/skills/find-skills"
     },
     {
-      "name": "python-code-review",
-      "description": "Python 代码审查，检查类型安全、异步模式、错误处理",
-      "dir": ".agents/skills/python-code-review"
-    },
-    {
-      "name": "xlsx",
-      "description": "Excel 文件处理，支持创建、编辑、分析 .xlsx/.csv 文件",
-      "dir": ".agents/skills/xlsx"
+      "name": "skill-creator",
+      "description": "创建新技能、修改和优化现有技能，支持技能性能评估",
+      "dir": ".agent/skills/skill-creator"
     }
   ]
 }
@@ -481,8 +475,9 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 │   │   ├── cron.png       # 定时任务截图
 │   │   └── planning.png   # 深度研究截图
 │   └── music/             # 音乐资源
-└── .agents/skills/        # 技能插件目录
+└── .agent/skills/         # 技能插件目录
     ├── find-skills/
-    ├── python-code-review/
-    └── xlsx/
+    ├── skill-creator/
+    ├── alibaba-stock/
+    └── alibaba-sentiment-analyzer/
 ```
