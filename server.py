@@ -76,7 +76,10 @@ async def get_commands():
     toolkit=Toolkit()
     for skill_dir in os.listdir(".agents/skills"):
         if os.path.isdir(os.path.join(".agents/skills", skill_dir)):
-            toolkit.register_agent_skill(os.path.join(".agents/skills", skill_dir))
+            try:
+                toolkit.register_agent_skill(os.path.join(".agents/skills", skill_dir))
+            except BaseException as e:
+                print(f"Error registering skill {skill_dir}: {e}")
     skills_list = list(toolkit.skills.values())
     return {"skills": skills_list}
 

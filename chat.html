@@ -1858,7 +1858,7 @@
 
     <script type="text/babel">
         console.log('🚀 开始执行 React 代码:', new Date().toISOString());
-        const { useState, useEffect, useRef } = React;
+        const { useState, useEffect, useRef, useCallback } = React;
 
         // 配置 marked
         if (typeof marked !== 'undefined') {
@@ -1942,38 +1942,8 @@
             const [cronJobs, setCronJobs] = useState([]);
             const [cronJobsLoading, setCronJobsLoading] = useState(false);
 
-            // 加载技能列表
-            useEffect(() => {
-                const fetchSkills = async () => {
-                    try {
-                        console.log('开始获取技能列表...');
-                        const tokenParam = urlTokenRef.current ? `?token=${encodeURIComponent(urlTokenRef.current)}` : '';
-                        const response = await fetch(`/get_commands${tokenParam}`);
-                        console.log('技能接口响应状态:', response.status);
-                        if (response.ok) {
-                            const data = await response.json();
-                            console.log('技能接口返回数据:', data);
-                            // 处理不同的返回格式
-                            let skillsList = [];
-                            if (Array.isArray(data)) {
-                                skillsList = data;
-                            } else if (data.skills && Array.isArray(data.skills)) {
-                                skillsList = data.skills;
-                            } else if (typeof data === 'object') {
-                                // 如果是对象，尝试提取技能列表
-                                skillsList = Object.values(data);
-                            }
-                            setSkills(skillsList);
-                            console.log('已加载技能列表:', skillsList);
-                        } else {
-                            console.error('获取技能列表失败，状态码:', response.status);
-                        }
-                    } catch (error) {
-                        console.error('加载技能列表失败:', error);
-                    }
-                };
-                fetchSkills();
-            }, []);
+            // 使用 ref 来跟踪是否正在加载技能，避免并发重复请求
+            const skillsLoadingRef = useRef(false);
 
             // 页面加载时拉取历史对话
             useEffect(() => {
@@ -2040,6 +2010,45 @@
                     setShowSkillSuggestions(false);
                 }
             }, [inputText, skills]);
+
+            // 独立的 useEffect 用于监听输入 / 时获取技能列表
+            useEffect(() => {
+                const slashIndex = inputText.indexOf('/');
+                if (slashIndex !== -1 && !skillsLoadingRef.current) {
+                    skillsLoadingRef.current = true;
+                    console.log('开始获取技能列表...');
+                    const tokenParam = urlTokenRef.current ? `?token=${encodeURIComponent(urlTokenRef.current)}` : '';
+                    fetch(`/get_commands${tokenParam}`)
+                        .then(response => {
+                            console.log('技能接口响应状态:', response.status);
+                            if (response.ok) {
+                                return response.json();
+                            }
+                            throw new Error('获取技能列表失败，状态码:' + response.status);
+                        })
+                        .then(data => {
+                            console.log('技能接口返回数据:', data);
+                            // 处理不同的返回格式
+                            let skillsList = [];
+                            if (Array.isArray(data)) {
+                                skillsList = data;
+                            } else if (data.skills && Array.isArray(data.skills)) {
+                                skillsList = data.skills;
+                            } else if (typeof data === 'object') {
+                                // 如果是对象，尝试提取技能列表
+                                skillsList = Object.values(data);
+                            }
+                            setSkills(skillsList);
+                            console.log('已加载技能列表:', skillsList);
+                        })
+                        .catch(error => {
+                            console.error('加载技能列表失败:', error);
+                        })
+                        .finally(() => {
+                            skillsLoadingRef.current = false;
+                        });
+                }
+            }, [inputText]);
 
             // 渲染 Plan 组件
             const renderPlan = (plan) => {
@@ -2962,12 +2971,17 @@
                                             {/* 提取图片 - 优先使用 images 数组（实时消息），否则从 content 数组提取 */}
                                             {(message.images?.length > 0 || msgContent.filter(item => item.type === 'image').length > 0) && (
                                                 <div className="user-images">
-                                                    {message.images?.map((imgSrc, idx) => (
-                                                        <img key={idx} src={imgSrc} alt={`上传图片 ${idx + 1}`} />
-                                                    ))}
-                                                    {msgContent.filter(item => item.type === 'image').map((item, idx) => (
-                                                        <img key={`c-${idx}`} src={item.source?.data || item.data} alt={`上传图片 ${idx + 1}`} />
-                                                    ))}
+                                                    {message.images?.map((imgSrc, idx) => {
+                                                        // 确保图片 src 是有效的 data URL，如果不是则添加前缀
+                                                        const validSrc = imgSrc.startsWith('data:') ? imgSrc : `data:image/png;base64,${imgSrc}`;
+                                                        return <img key={idx} src={validSrc} alt={`上传图片 ${idx + 1}`} />;
+                                                    })}
+                                                    {msgContent.filter(item => item.type === 'image').map((item, idx) => {
+                                                        const imgData = item.source?.data || item.data;
+                                                        // 确保图片 src 是有效的 data URL
+                                                        const validSrc = imgData && imgData.startsWith('data:') ? imgData : `data:image/png;base64,${imgData}`;
+                                                        return <img key={`c-${idx}`} src={validSrc} alt={`上传图片 ${idx + 1}`} />;
+                                                    })}
                                                 </div>
                                             )}
                                         </div>
