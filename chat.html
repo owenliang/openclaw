@@ -1932,7 +1932,7 @@
             const [showScrollButton, setShowScrollButton] = useState(false); // 是否显示滚动到底部按钮
 
             // Cron 观察窗口状态
-            const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'cron'
+            const [activeTab, setActiveTab] = useState('chat'); // 'chat' | 'cron' | 'persona'
             const [cronHistory, setCronHistory] = useState([]);
             const [cronLoading, setCronLoading] = useState(false);
             const [cronLastRefresh, setCronLastRefresh] = useState(null);
@@ -1941,6 +1941,10 @@
             // Cron 任务列表状态
             const [cronJobs, setCronJobs] = useState([]);
             const [cronJobsLoading, setCronJobsLoading] = useState(false);
+
+            // 人格设定状态
+            const [personas, setPersonas] = useState({ agents: '', soul: '', user: '' });
+            const [personasLoading, setPersonasLoading] = useState(false);
 
             // 使用 ref 来跟踪是否正在加载技能，避免并发重复请求
             const skillsLoadingRef = useRef(false);
@@ -2760,6 +2764,14 @@
                     }, 150);
                     return () => clearTimeout(timer);
                 }
+                if (activeTab === 'persona') {
+                    setPersonasLoading(true);
+                    fetch('/get_personas')
+                        .then(r => r.json())
+                        .then(data => setPersonas(data))
+                        .catch(() => {})
+                        .finally(() => setPersonasLoading(false));
+                }
             }, [activeTab]);
 
             // 切换 Cron tool_use 展开状态
@@ -2924,7 +2936,7 @@
                                     </div>
                                 </div>
                                 <div style={{ fontSize: '12px', opacity: 0.9, marginTop: '4px' }}>
-                                    {activeTab === 'chat' ? `Session: ${sessionId}` : 'Session: cronjob'}
+                                    {activeTab === 'chat' ? `Session: ${sessionId}` : activeTab === 'cron' ? 'Session: cronjob' : '人格设定'}
                                 </div>
                             </div>
                             <button className="new-chat-button" onClick={() => {
@@ -2948,6 +2960,12 @@
                                 onClick={() => setActiveTab('cron')}
                             >
                                 定时任务
+                            </button>
+                            <button
+                                className={`tab-button ${activeTab === 'persona' ? 'active' : ''}`}
+                                onClick={() => setActiveTab('persona')}
+                            >
+                                人格设定
                             </button>
                         </div>
 
@@ -3235,7 +3253,7 @@
                         )}
                     </div>
                             </>
-                        ) : (
+                        ) : activeTab === 'cron' ? (
                             // Cron 观察窗口
                             <div className="cron-container" ref={cronMessagesRef} onScroll={handleCronScroll}>
                                 <div className={`cron-refresh-indicator ${cronLoading ? 'refreshing' : ''}`}>
@@ -3264,6 +3282,25 @@
                                         ↓
                                     </button>
                                 )}
+                            </div>
+                        ) : (
+                            // 人格设定面板
+                            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                                {personasLoading ? (
+                                    <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>加载中...</div>
+                                ) : [
+                                    { key: 'agents', title: 'AGENTS.md', icon: '🤖', desc: '行为规范与优先级' },
+                                    { key: 'soul',   title: 'SOUL.md',   icon: '✨', desc: '人格语气与风格' },
+                                    { key: 'user',   title: 'USER.md',   icon: '👤', desc: '用户画像与偏好' },
+                                ].map(({ key, title, icon, desc }) => (
+                                    <div key={key} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '12px', border: '1px solid #e8e8e8' }}>
+                                        <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                            <span>{icon}</span><span>{title}</span>
+                                            <span style={{ fontWeight: 400, fontSize: '12px', color: '#888', marginLeft: '4px' }}>{desc}</span>
+                                        </div>
+                                        <pre style={{ margin: 0, fontSize: '13px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#333', fontFamily: 'inherit', maxHeight: '300px', overflowY: 'auto' }}>{personas[key] || '(未定义)'}</pre>
+                                    </div>
+                                ))}
                             </div>
                         )}
                 </div>

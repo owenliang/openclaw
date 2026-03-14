@@ -1,4 +1,5 @@
 import asyncio
+from contextlib import asynccontextmanager
 import json
 import os
 import sys
@@ -13,24 +14,62 @@ from agentscope.plan import PlanNotebook
 from agentscope.session import JSONSession
 from model import OpenAIChatModelCached, VLTokenCounter
 from session import Session, SessionStatus, SESS_MGR
-from tools import build_agent_toolkit, build_subagent_tool, AGENT_SYS_PROMPT, SUBAGENT_PROMPT
+from tools import build_agent_toolkit, build_subagent_tool, SUBAGENT_PROMPT, REME_PROMPT, AGENT_PERSONA_PROMPT,CRON_PROMPT, init_reme, format_system_prompt
 from conf import FLAGS
 from datamodel import AgentStates
+if FLAGS["enable_reme"]:
+    from reme.reme_light import ReMeInMemoryMemory
 
-async def register_reasoning_hint(agent):
-    async def add_reasoning_hint(agent,kwargs):
+global reme, hf_token_counter
+
+@asynccontextmanager
+async def superagent_lifecycle():
+    global reme, hf_token_counter
+    try:    
+        os.makedirs(".agent/skills/",exist_ok=True)
+        if FLAGS["enable_reme"]:
+            reme, hf_token_counter = init_reme()
+            await reme.start()
+        yield
+    finally:
+        if FLAGS["enable_reme"]:
+            await reme.close()
+
+async def register_reme(agent: ReActAgent):
+    async def reme_pre_reasoning(agent: ReActAgent,kwargs):
+        messages=await agent.memory.get_memory(exclude_mark="compressed")
+        msg_to_keep,compressed_summary=await reme.pre_reasoning_hook(
+            messages=messages, 
+            compressed_summary=agent.memory._compressed_summary,
+            token_counter=hf_token_counter,
+            system_prompt=agent.sys_prompt,
+            max_input_length=100*1000, # qwen3.5 100K context window
+            compact_ratio=0.6,
+            enable_tool_result_compact=True,
+            tool_result_compact_keep_n=5,
+        )
+        if compressed_summary:
+            await agent.memory.update_compressed_summary(compressed_summary)
+        keep_msg_ids=set([msg.id for msg in msg_to_keep])
+        compressed_msg_ids=set([msg.id for msg in messages])-keep_msg_ids
+        if compressed_msg_ids:
+            await agent.memory.update_messages_mark(new_mark="compressed",msg_ids=compressed_msg_ids)
+    agent.register_instance_hook('pre_reasoning','reme_pre_reasoning',reme_pre_reasoning)
+
+async def register_reasoning_hint(agent: ReActAgent):
+    async def add_reasoning_hint(agent: ReActAgent,kwargs):
         now = datetime.now()
         weekday_map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
         weekday = weekday_map[now.weekday()]
         current_time = now.strftime(f"%Y年%m月%d日 {weekday} %H:%M:%S")
         await agent.memory.add(Msg(name="current_time", content=f"当前时间(内部参考信息,非用户输入)：{current_time}", role="user"), marks='MY_REASONING_HINT')
-    async def remove_reasoning_hint(agent,kwargs,output):
+    async def remove_reasoning_hint(agent: ReActAgent,kwargs,output=None):
         await agent.memory.delete_by_mark(mark='MY_REASONING_HINT')
     agent.register_instance_hook('pre_reasoning','add_reasoning_hint',add_reasoning_hint)
     agent.register_instance_hook('post_reasoning','remove_reasoning_hint',remove_reasoning_hint)
 
-async def register_sess_keepalive(agent,sess):
-    async def activate_sess_client(agent,kwargs,output=None):
+async def register_sess_keepalive(agent: ReActAgent,sess):
+    async def activate_sess_client(agent:ReActAgent,kwargs,output=None):
         await sess.activate()
     for hooks in ['pre_reasoning', 'pre_acting', 'post_acting', 'post_reasoning']:
         agent.register_instance_hook(hooks,'activate_sess_client',activate_sess_client)
@@ -51,10 +90,12 @@ async def agent_runner(sess: Session):
             response_q=request.response_queue
             toolkit=await build_agent_toolkit(sess)
 
-            extra_sys_prompt = []
+            extra_sys_prompt = [AGENT_PERSONA_PROMPT, CRON_PROMPT]
             if FLAGS["enable_subagent"]:
                 toolkit.register_tool_function(await build_subagent_tool())
                 extra_sys_prompt.append(SUBAGENT_PROMPT)
+            if FLAGS["enable_reme"]:
+                extra_sys_prompt.append(REME_PROMPT)
             extra_sys_prompt='\n'.join(extra_sys_prompt)
     
             plan_notebook=None
@@ -62,7 +103,7 @@ async def agent_runner(sess: Session):
                 plan_notebook=PlanNotebook()
             agent=ReActAgent(
                 name="Owen",
-                sys_prompt=AGENT_SYS_PROMPT.format(extra_prompt=extra_sys_prompt),
+                sys_prompt=format_system_prompt(extra_sys_prompt),
                 model=OpenAIChatModelCached(
                     model_name="qwen3.5-plus",
                     api_key=os.environ["DASHSCOPE_API_KEY"],
@@ -85,11 +126,22 @@ async def agent_runner(sess: Session):
                 toolkit=toolkit,
                 plan_notebook=plan_notebook,
                 parallel_tool_calls=True,
-                memory=InMemoryMemory(),
-                compression_config=ReActAgent.CompressionConfig(
+                memory=ReMeInMemoryMemory(hf_token_counter) if FLAGS["enable_reme"] else InMemoryMemory(),
+                max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
+            )
+            session=JSONSession(save_dir=".sessions")
+            await session.load_session_state(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
+
+            agent.set_console_output_enabled(False)
+            await register_sess_keepalive(agent,sess)
+            await register_reasoning_hint(agent)
+            if FLAGS["enable_reme"]:
+                await register_reme(agent)
+            else:
+                agent.compression_config=ReActAgent.CompressionConfig(
                     enable=True,
                     agent_token_counter=VLTokenCounter(),
-                    trigger_threshold=600000,
+                    trigger_threshold=60*1000,
                     keep_recent=5,
                     compression_model=OpenAIChatModel(
                          # 百炼只有部分模型支持json schema: https://bailian.console.aliyun.com/cn-beijing/?spm=5176.29619931.J_PvCec88exbQTi-U433Fxg.4.74cd10d7jGKMNJ&tab=doc#/doc/?type=model&url=2862209
@@ -105,15 +157,7 @@ async def agent_runner(sess: Session):
                             }
                         }
                     ),
-                ),
-                max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
-            )
-            session=JSONSession(save_dir="./sessions")
-            await session.load_session_state(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
-
-            agent.set_console_output_enabled(False)
-            await register_sess_keepalive(agent,sess)
-            await register_reasoning_hint(agent)
+                )
 
             inputs = Msg(
                 name="user",
@@ -161,7 +205,7 @@ async def create_agent_if_not_exists(session_id: str) -> Session:
 
 #### services
 async def load_agent_states(session_id: str) -> AgentStates|None:
-    session=JSONSession(save_dir="./sessions")
+    session=JSONSession(save_dir=".sessions")
 
     memory=InMemoryMemory()
     try:

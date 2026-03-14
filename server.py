@@ -10,9 +10,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from datamodel import AgentRequest, ChatRequest
 from superagent import create_agent_if_not_exists, SESS_MGR, load_agent_states
+from tools import load_persona_file
 from cron_manager import CRON_MGR
 from dotenv import load_dotenv
 import uvicorn
+from superagent import superagent_lifecycle
 
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
@@ -31,9 +33,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app):
-    async with SESS_MGR:
-        os.makedirs(".agent/skills/",exist_ok=True)
-        # Load persisted cron jobs on startup
+    async with SESS_MGR,superagent_lifecycle():
         await CRON_MGR.load_from_disk()
         yield
 
@@ -83,6 +83,14 @@ async def get_commands():
                 print(f"Error registering skill {skill_dir}: {e}")
     skills_list = list(toolkit.skills.values())
     return {"skills": skills_list}
+
+@app.get('/get_personas')
+async def get_personas():
+    return {
+        "agents": load_persona_file("AGENTS.md"),
+        "soul": load_persona_file("SOUL.md"),
+        "user": load_persona_file("USER.md"),
+    }
 
 @app.get("/get_crons")
 async def get_crons():

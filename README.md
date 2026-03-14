@@ -25,6 +25,11 @@ Agentic Planning 支持复杂任务拆解，可视化展示计划进度和子任
 
 ![多模态对话](assets/image/multimodal.png)
 
+### 人格设定
+独立的人格设定 Tab，实时查看 AGENTS.md / SOUL.md / USER.md 三个配置文件内容，修改后热更新无需重启。
+
+![人格设定](assets/image/defines.png)
+
 ## 1. 技术栈
 
 | 层级 | 技术 |
@@ -43,8 +48,10 @@ Agentic Planning 支持复杂任务拆解，可视化展示计划进度和子任
 - **真打断机制**：基于 request_id 的精准打断，可终止指定 SSE 请求
 - **MCP 长连接**：有状态 MCP 客户端保持长连接，支持 Playwright 浏览器等
 - **定时任务调度**：CronManager 统一管理定时任务，所有任务提交到专用 "cronjob" session 执行
+- **ReMe 长期记忆**：基于 ReMeLight 的持久化长期记忆，`pre_reasoning` hook 自动处理短期记忆压缩、tool result offload 和异步长期记忆写入；`memory_search` 作为工具支持语义搜索
+- **人格设定系统**：通过 `.agent/defines/` 目录下的三个 Markdown 文件定义 Agent 行为、人格和用户画像，热更新无需重启
 - **工具调用生态**：
-  - 内置工具：文件操作、Shell 命令、联网搜索、定时任务管理、子代理委托
+  - 内置工具：文件操作、Shell 命令、联网搜索、定时任务管理、子代理委托、长期记忆搜索
   - MCP 集成：Playwright 浏览器、八字算命等外部服务
 - **会话管理**：多会话隔离，支持长文本压缩和记忆恢复
 - **深度研究模式**：Agentic Planning 支持复杂任务拆解，可视化计划进度
@@ -61,11 +68,13 @@ graph TB
         ThreeJS[Three.js 3D背景]
         TabChat[对话 Tab]
         TabCron[定时任务 Tab]
+        TabPersona[人格设定 Tab]
         SkillHint[技能提示 /]
         DeepResearch[深度研究开关]
         ImgUpload[图片上传]
         UI --> TabChat
         UI --> TabCron
+        UI --> TabPersona
         TabChat --> SkillHint
         TabChat --> DeepResearch
         TabChat --> ImgUpload
@@ -78,12 +87,14 @@ graph TB
         HistoryEP[/history 历史接口/]
         CommandsEP[/get_commands 命令接口/]
         CronsEP[/get_crons 定时任务接口/]
+        PersonasEP[/get_personas 人格设定接口/]
         MusicEP[/music 音乐文件接口/]
         FastAPI --> ChatEP
         FastAPI --> StopEP
         FastAPI --> HistoryEP
         FastAPI --> CommandsEP
         FastAPI --> CronsEP
+        FastAPI --> PersonasEP
         FastAPI --> MusicEP
     end
 
@@ -127,6 +138,23 @@ graph TB
         MCPState2[Bazi MCP 无状态]
     end
 
+    subgraph "长期记忆层 ReMe"
+        ReMeLight[ReMeLight 单例]
+        MemoryStore[(记忆持久化 .reme/)]
+        ReMeLight -->|写入| MemoryStore
+        ReMeLight -->|语义检索| MemoryStore
+    end
+
+    subgraph "人格设定层"
+        PersonaDir[.agent/defines/]
+        AgentsMd[AGENTS.md 行为规范]
+        SoulMd[SOUL.md 人格风格]
+        UserMd[USER.md 用户画像]
+        PersonaDir --> AgentsMd
+        PersonaDir --> SoulMd
+        PersonaDir --> UserMd
+    end
+
     subgraph "定时任务层 CronManager"
         CronMgr[CronManager 单例]
         CronJob1[CronJob]
@@ -143,6 +171,8 @@ graph TB
     TabChat -->|SSE 流式| ChatEP
     TabCron -->|轮询| HistoryEP
     TabCron -->|轮询| CronsEP
+    TabPersona -->|请求| PersonasEP
+    PersonasEP --> PersonaDir
     ChatEP -->|get_or_create_session| SessionMgr
     HistoryEP -->|get_session| SessionMgr
     CronsEP --> CronMgr
@@ -165,6 +195,10 @@ graph TB
     ReAct2 -->|使用| Plan2[规划 B]
     ReAct1 -->|触发| Compress
     ReAct2 -->|触发| Compress
+    ReAct1 -->|长期记忆| ReMeLight
+    ReAct2 -->|长期记忆| ReMeLight
+    ReAct1 -->|注入| PersonaDir
+    ReAct2 -->|注入| PersonaDir
     MCP -->|长连接| MCPState1
     MCP -->|SSE| MCPState2
 ```
@@ -178,7 +212,7 @@ AgentScope 内置完整的定时任务调度系统，通过 `CronManager` 单例
 | 特性 | 说明 |
 |------|------|
 | **秒级精度** | 支持 6 字段 cron 表达式（秒 分 时 日 月 周） |
-| **持久化存储** | 任务自动保存到 `jobs.json`，重启后自动恢复 |
+| **持久化存储** | 任务自动保存到 `cron_jobs.json`，重启后自动恢复 |
 | **隔离执行** | 所有定时任务在专用 `cronjob` session 中执行 |
 | **实时观察** | 前端「定时任务」Tab 实时查看执行历史和对话内容 |
 | **自动滚动** | 新消息自动滚动到底部，支持手动回滚查看历史 |
@@ -203,7 +237,60 @@ AgentScope 内置完整的定时任务调度系统，通过 `CronManager` 单例
 | `del_cron` | 删除指定定时任务 |
 | `list_crons` | 列出所有定时任务 |
 
-## 5. 运行方法
+## 5. ReMe 长期记忆
+
+基于 [ReMe](https://github.com/agentscope-ai/ReMe) 实现 Agent 的持久化长期记忆。通过 `pre_reasoning` hook 自动运行：短期记忆压缩、tool result offload 到磁盘、异步将对话内容总结写入长期记忆。`memory_search` 作为独立工具由 Agent 主动调用，支持语义搜索历史记忆。
+
+### 5.1 功能特性
+
+| 特性 | 说明 |
+|------|------|
+| **自动压缩** | `pre_reasoning` hook 自动压缩短期记忆，tool result offload 到磁盘 |
+| **异步写入** | 对话内容异步总结并写入长期记忆 |
+| **语义搜索** | `memory_search` 工具支持基于语义的记忆检索 |
+| **持久化** | 记忆写入 `.reme/` 目录，重启后仍可检索 |
+| **多后端** | 支持 SQLite（内建）、Chroma、Qdrant 等向量库 |
+
+### 5.2 开启方式
+
+ReMe 为**可选依赖**，需单独安装：
+
+```bash
+# 方式一：克隆源码安装（推荐）
+git clone https://github.com/agentscope-ai/ReMe.git
+cd ReMe
+pip install -e ".[light]"
+```
+
+```bash
+# 方式二：在项目目录内已有 ReMe 子目录时
+pip install -e "ReMe/.[light]"
+```
+
+在 `conf.py` 中开启：
+```python
+"enable_reme": True
+```
+
+### 5.3 相关工具
+
+| 工具名称 | 功能 |
+|---------|------|
+| `memory_search` | 语义搜索历史记忆，由 Agent 主动调用 |
+
+## 6. 人格设定系统
+
+Agent 的行为、人格和用户信息通过 `.agent/defines/` 目录下的三个 Markdown 文件定义，每次请求自动注入 system prompt。
+
+| 文件 | 用途 |
+|------|------|
+| `AGENTS.md` | 总控规则：行为规范、工具调用策略、优先级、记忆使用方式 |
+| `SOUL.md` | 人格定义：性格、语气、边界、价値观 |
+| `USER.md` | 用户画像：名字、称呼、时区、偷好 |
+
+修改任意文件后立即生效，无需重启。可通过前端「人格设定」 Tab 实时查看当前内容。
+
+## 7. 运行方法
 
 ### 环境准备
 
@@ -236,6 +323,7 @@ SERVER_API_TOKEN=your_secret_token
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
+| `enable_reme` | ReMe 长期记忆（需安装 ReMe 依赖，**默认关闭**） | `False` |
 | `enable_playwright_mcp` | Playwright 浏览器 MCP | `True` |
 | `enable_bazi_mcp` | 八字算命 MCP | `True` |
 | `enable_websearch` | 联网搜索工具 | `True` |
@@ -276,6 +364,7 @@ python test_parallel.py
 
 | 工具名称 | 功能描述 | 启用状态 |
 |---------|---------|---------|
+| memory_search | 长期记忆语义搜索（需开启 enable_reme，否则不注册） | 默认关闭 |
 | view_text_file | 查看文本文件内容 | 默认启用 |
 | write_text_file | 写入文本文件 | 默认启用 |
 | insert_text_file | 在指定位置插入文本 | 默认启用 |
@@ -305,13 +394,14 @@ python test_parallel.py
 ### API 接口列表
 
 | 接口路径 | 方法 | 功能描述 |
-|---------|------|---------|
+|---------|------|----------|
 | `/` | GET | 主页，返回 chat.html |
 | `/chat` | POST | 对话接口，SSE 流式返回，支持深度研究模式 |
 | `/stop` | GET | 停止指定请求（基于 request_id 精准打断） |
 | `/history` | GET | 获取会话历史记录 |
 | `/get_commands` | GET | 获取可用命令/技能列表 |
 | `/get_crons` | GET | 获取定时任务列表 |
+| `/get_personas` | GET | 获取 AGENTS.md/SOUL.md/USER.md 三个人格设定文件内容 |
 | `/music/{filename}` | GET | 音乐文件服务 |
 
 ### 接口返回值样例
@@ -435,6 +525,25 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 
 ---
 
+#### GET /get_personas - 获取人格设定文件
+
+**成功响应：**
+```json
+{
+  "agents": "# AGENTS.md\n这里是行为规范内容...",
+  "soul": "# SOUL.md\n这里是人格定义内容...",
+  "user": "# USER.md\n这里是用户信息内容..."
+}
+```
+
+**字段说明：**
+- `agents`: AGENTS.md 文件原文，定义行为规范与工具调用策略
+- `soul`: SOUL.md 文件原文，定义人格语气与风格
+- `user`: USER.md 文件原文，定义用户画像与偏好
+- 文件不存在时返回空字符串
+
+---
+
 #### GET /get_commands - 获取可用命令/技能列表
 
 **成功响应：**
@@ -460,9 +569,9 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 - `description`: 技能描述
 - `dir`: 技能目录路径
 
-## 6. 前端功能详解
+## 8. 前端功能详解
 
-### 6.1 对话界面
+### 8.1 对话界面
 
 | 功能 | 说明 |
 |------|------|
@@ -475,7 +584,7 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 | **消息排队** | 支持在 AI 回复时发送下一条消息，自动排队执行 |
 | **打断机制** | 点击停止按钮基于 request_id 精准打断当前生成 |
 
-### 6.2 定时任务 Tab
+### 8.2 定时任务 Tab
 
 | 功能 | 说明 |
 |------|------|
@@ -484,17 +593,35 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 | **自动刷新** | 每 5 秒自动刷新任务列表和历史记录 |
 | **状态标识** | 运行中/已停止状态可视化展示 |
 
-### 6.3 深度研究可视化
+### 8.3 人格设定 Tab
+
+| 功能 | 说明 |
+|------|------|
+| **AGENTS.md** | 查看 Agent 行为规范、工具调用策略、优先级设定 |
+| **SOUL.md** | 查看人格语气、说话风格、价値观定义 |
+| **USER.md** | 查看用户画像、称呼、时区、偏好设定 |
+| **热更新** | 文件修改后立即生效，无需重启服务 |
+
+### 8.4 深度研究可视化
 
 深度研究模式启用后，界面会显示：
 - **计划名称和描述**：当前任务的总体目标
 - **子任务列表**：每个子任务的状态（待处理/进行中/已完成/已放弃）
 - **进度跟踪**：实时更新子任务执行状态
 
-## 7. 项目结构
+## 9. 项目结构
 
 ```
 .
+├── .agent/
+│   ├── defines/               # 人格设定文件目录
+│   │   ├── AGENTS.md          # 行为规范与优先级
+│   │   ├── SOUL.md            # 人格/语气/边界定义
+│   │   └── USER.md            # 用户上下文（名字、称呼、偶好）
+│   └── skills/                # 技能插件目录
+│       ├── find-skills/       # 帮助用户发现和安装 Agent Skills
+│       └── skill-creator/     # 创建和优化技能，支持性能评估
+├── .reme/                     # ReMe 长期记忆持久化目录
 ├── server.py              # FastAPI 主服务
 ├── superagent.py          # Agent 核心逻辑 (ReActAgent)
 ├── tools.py               # 工具函数与注册
@@ -505,14 +632,11 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 ├── chat.html              # 前端页面 (React 18 + Three.js)
 ├── cron_jobs.json         # 定时任务持久化文件
 ├── requirements.txt       # Python 依赖
-├── sessions/              # 会话状态存储目录
+├── .sessions/              # 会话状态存储目录
 ├── assets/
 │   ├── image/             # 截图资源
 │   │   ├── chat.png       # 对话界面截图
 │   │   ├── cron.png       # 定时任务截图
 │   │   └── planning.png   # 深度研究截图
 │   └── music/             # 音乐资源
-└── .agent/skills/         # 技能插件目录
-    ├── find-skills/         # 帮助用户发现和安装 Agent Skills
-    └── skill-creator/       # 创建和优化技能，支持性能评估
 ```

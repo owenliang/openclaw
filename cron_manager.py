@@ -201,18 +201,32 @@ async def build_cron_tools():
 
     async def add_cron(cron_expr: str, task_description: str) -> ToolResponse:
         '''
-        添加一个定时任务，会按照指定的时间周期执行给定的任务描述。
+        Schedule a recurring task. When triggered, task_description is sent to the AI as a new request.
+
+        When to use:
+        - User says "remind me to drink water every day at 8am" → add_cron("0 8 * * *", "Remind user to drink water")
+        - User says "check server status every 5 minutes" → add_cron("*/5 * * * *", "Check server status")
+        - User says "backup data every hour" → add_cron("@hourly", "Perform data backup")
+        - User says "run every 30 seconds" → add_cron("*/30 * * * * *", "...")
 
         Args:
-            cron_expr: Cron表达式字符串，支持以下格式：
-                - "*/5 * * * *" - 每5分钟执行一次
-                - "@minutely" - 每分钟执行一次
-                - "@hourly" - 每小时执行一次
-                - "@daily" - 每天执行一次
-            task_description: 当定时任务触发时要发送给AI助手的任务描述
+            cron_expr: Cron expression. Supports 5-field (minute-level) and 6-field (second-level) formats,
+                plus shorthand aliases. Field order:
+                - 5-field: "min hour day month weekday"
+                - 6-field: "sec min hour day month weekday"
+                Examples:
+                - "*/N * * * *"   - every N minutes
+                - "0 */N * * *"   - every N hours
+                - "0 H * * *"     - daily at hour H
+                - "*/N * * * * *" - every N seconds (6-field)
+                - "@minutely"     - every minute
+                - "@hourly"       - every hour
+                - "@daily"        - daily at midnight
+                - "@weekly"       - weekly on Sunday midnight
+            task_description: Instruction sent to the AI when the job fires. Should clearly describe the task.
 
         Returns:
-            ToolResponse，包含创建成功的定时任务唯一ID
+            ToolResponse containing the unique job ID, which can be used later to delete the job.
         '''
         try:
             job_id = await CRON_MGR.add_cron(cron_expr, task_description)
@@ -236,13 +250,13 @@ async def build_cron_tools():
 
     async def del_cron(job_id: str) -> ToolResponse:
         '''
-        根据任务ID删除指定的定时任务。
+        Delete a scheduled job by its ID.
 
         Args:
-            job_id: add_cron返回的唯一任务ID
+            job_id: The unique job ID returned by add_cron.
 
         Returns:
-            ToolResponse，包含删除成功或失败的消息
+            ToolResponse indicating whether the deletion succeeded.
         '''
         success = await CRON_MGR.del_cron(job_id)
         return ToolResponse(
@@ -256,10 +270,10 @@ async def build_cron_tools():
 
     async def list_crons() -> ToolResponse:
         '''
-        列出所有已创建的定时任务。
+        List all scheduled jobs with their ID, cron expression, task description, and running status.
 
         Returns:
-            ToolResponse，包含所有定时任务的格式化列表
+            ToolResponse containing the formatted job list.
         '''
         jobs = await CRON_MGR.list_crons()
         if not jobs:

@@ -10,4 +10,5 @@ FLAGS = {
     "enable_execute_shell_command": True,   # 是否启用执行Shell命令TOOL
     "enable_subagent":              True,   # 是否启用子代理
     "enable_cron":                  True,   # 是否启用定时任务管理
+    "enable_reme":                  False,   # 是否启用ReMe
 }
