@@ -3,3 +3,4 @@ sessions/
 __pycache__/
 .env
 cron_jobs.json
+.qoder

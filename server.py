@@ -9,7 +9,8 @@ from fastapi.responses import FileResponse, Response, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from datamodel import AgentRequest, ChatRequest
-from superagent import create_agent_if_not_exists, sess_mgr, cron_mgr, load_agent_states
+from superagent import create_agent_if_not_exists, SESS_MGR, load_agent_states
+from cron_manager import CRON_MGR
 from dotenv import load_dotenv
 import uvicorn
 
@@ -30,10 +31,10 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app):
-    async with sess_mgr:
+    async with SESS_MGR:
         os.makedirs(".agent/skills/",exist_ok=True)
         # Load persisted cron jobs on startup
-        await cron_mgr.load_from_disk()
+        await CRON_MGR.load_from_disk()
         yield
 
 app=fastapi.FastAPI(lifespan=lifespan)
@@ -85,7 +86,7 @@ async def get_commands():
 
 @app.get("/get_crons")
 async def get_crons():
-    jobs = await cron_mgr.list_crons()
+    jobs = await CRON_MGR.list_crons()
     return {"status": "success", "jobs": jobs}
 
 @app.post("/chat")
@@ -108,12 +109,12 @@ async def chat(request: ChatRequest):
             msg = await agent_req.response_queue.get()
             if msg is None:
                 break
-            yield msg
+            yield f"data: {json.dumps(msg, ensure_ascii=False)}\n\n"
     return StreamingResponse(event_generator(), media_type="text/event-stream")
     
 @app.get('/stop')
 async def stop(session_id: str,request_id: str):
-    sess = await sess_mgr.get_or_create_session(session_id, create=False)
+    sess = await SESS_MGR.get_or_create_session(session_id, create=False)
     if sess is None:
         return {"status": "session not exists", "session_id": session_id, "request_id": request_id}
     await sess.cancel_request(request_id)

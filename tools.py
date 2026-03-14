@@ -2,6 +2,7 @@ import json
 import os
 import sys
 from datetime import datetime
+from typing import AsyncGenerator
 
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
@@ -19,24 +20,9 @@ from agentscope.tool import (
     view_text_file,
     write_text_file,
 )
-
 from model import OpenAIChatModelCached, VLTokenCounter
-from session import GlobalSessionManager, Session
-
-
-FLAGS = {
-    "enable_agentrun_browser_mcp": False,  # 是否启用阿里云agentrun浏览器MCP（http MCP形态）
-    "enable_sandbox": False,  # 是否启用agentscope-runtime沙箱(只支持browser，底层是docker拉起mcp server) --- 需要Linux/Mac安装Docker
-    "enable_playwright_mcp": True,  # 是否启用Playwright MCP（stdio MCP形态）
-    "enable_bazi_mcp": True,  # 是否启用八字算命MCP
-    "enable_websearch": True,  # 是否启用网页搜索TOOL
-    "enable_view_text_file": True,  # 是否启用查看文本文件TOOL
-    "enable_write_text_file": True,  # 是否启用写入文本文件TOOL
-    "enable_insert_text_file": True,  # 是否启用插入文本文件TOOL
-    "enable_execute_shell_command": True,  # 是否启用执行Shell命令TOOL
-    "enable_subagent": True,  # 是否启用子代理
-    "enable_cron": True,  # 是否启用定时任务管理
-}
+from session import Session, SESS_MGR
+from conf import FLAGS
 
 # Agent系统提示词模板
 AGENT_SYS_PROMPT = """你是超级助理Owen，一个高效、智能的AI助手，使用中文与用户交流。
@@ -95,7 +81,7 @@ SUBAGENT_PROMPT = """
 """
 
 
-async def web_search(query: str) -> ToolResponse:
+async def web_search(query: str) -> AsyncGenerator[ToolResponse, None]:
     '''
     执行联网搜索，可以检索回图文混排的优质搜索结果，如果你觉得现有的信息不足以回答问题，可尝试这个工具进行搜索。
     如果用户需要的是图片，优先使用这个工具进行检索。
@@ -141,9 +127,9 @@ async def web_search(query: str) -> ToolResponse:
             ],
         )
 
-async def build_subagent_tool(sess_mgr: GlobalSessionManager):
-    async def subagent_tool(task: str) -> ToolResponse:
-        sess = sess_mgr.temp_session()
+async def build_subagent_tool():
+    async def subagent_tool(task: str) -> AsyncGenerator[ToolResponse, None]:
+        sess = SESS_MGR.temp_session()
         try:
             toolkit = await build_agent_toolkit(sess)
 
@@ -237,97 +223,6 @@ async def build_subagent_tool(sess_mgr: GlobalSessionManager):
     subagent_tool.__doc__ = docstr
     return subagent_tool
 
-
-async def build_cron_tools():
-    """Build cron management tools."""
-    
-    async def add_cron(cron_expr: str, task_description: str) -> ToolResponse:
-        '''
-        Add a scheduled cron job that will execute the given task description periodically.
-        
-        Args:
-            cron_expr: Cron expression string. Supports formats like:
-                - "*/5 * * * *" - every 5 minutes
-                - "@minutely" - every minute
-                - "@hourly" - every hour
-                - "@daily" - every day
-            task_description: The task description to send to the AI agent when cron triggers
-            
-        Returns:
-            ToolResponse with the unique job ID for the created cron job
-        '''
-        from superagent import cron_mgr
-        job_id = await cron_mgr.add_cron(cron_expr, task_description)
-        return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Cron job created successfully. Job ID: {job_id}",
-                ),
-            ],
-        )
-    
-    async def del_cron(job_id: str) -> ToolResponse:
-        '''
-        Delete a scheduled cron job by its job ID.
-        
-        Args:
-            job_id: The unique job ID returned by add_cron
-            
-        Returns:
-            ToolResponse with success or failure message
-        '''
-        from superagent import cron_mgr
-        success = await cron_mgr.del_cron(job_id)
-        return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text=f"Cron job {job_id} deleted successfully." if success else f"Cron job {job_id} not found.",
-                ),
-            ],
-        )
-    
-    async def list_crons() -> ToolResponse:
-        '''
-        List all scheduled cron jobs.
-        
-        Returns:
-            ToolResponse with a formatted list of all cron jobs
-        '''
-        from superagent import cron_mgr
-        jobs = await cron_mgr.list_crons()
-        if not jobs:
-            return ToolResponse(
-                content=[
-                    TextBlock(
-                        type="text",
-                        text="No cron jobs scheduled.",
-                    ),
-                ],
-            )
-        
-        lines = ["Scheduled Cron Jobs:", "-" * 80]
-        for job in jobs:
-            status = "running" if job["running"] else "stopped"
-            lines.append(f"ID: {job['id']}")
-            lines.append(f"  Expression: {job['cron_expr']}")
-            lines.append(f"  Task: {job['task_description'][:50]}...")
-            lines.append(f"  Status: {status}")
-            lines.append("")
-        
-        return ToolResponse(
-            content=[
-                TextBlock(
-                    type="text",
-                    text="\n".join(lines),
-                ),
-            ],
-        )
-    
-    return add_cron, del_cron, list_crons
-
-
 async def build_agent_toolkit(sess: Session):
     toolkit = Toolkit(
         agent_skill_instruction=f'''# Skills 使用指南
@@ -403,6 +298,7 @@ async def build_agent_toolkit(sess: Session):
     
     # Cron tools
     if FLAGS["enable_cron"]:
+        from cron_manager import build_cron_tools
         add_cron_tool, del_cron_tool, list_crons_tool = await build_cron_tools()
         toolkit.register_tool_function(add_cron_tool)
         toolkit.register_tool_function(del_cron_tool)

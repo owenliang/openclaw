@@ -222,11 +222,31 @@ SERVER_API_AUTH=true
 SERVER_API_TOKEN=your_secret_token
 ```
 
-**API 鉴权说明**：
-- 不设置 `SERVER_API_AUTH` 或设置为 `false` 时，默认不启用鉴权
-- 设置 `SERVER_API_AUTH=true` 后，所有 API 接口需要携带 `Authorization: Bearer <token>` 请求头
-- Token 值由 `SERVER_API_TOKEN` 环境变量指定
-- 未携带或错误的 Token 将返回 401/403 状态码
+**API 鉴权说明**（默认关闭）：
+| 场景 | 配置/使用方式 |
+|------|--------------|
+| 启用鉴权 | 设置 `SERVER_API_AUTH=true` 和 `SERVER_API_TOKEN=your_secret_token` |
+| API 请求 | 携带 Header: `Authorization: Bearer <token>` |
+| 网页访问 | URL 携带参数: `http://localhost:8000?token=your_secret_token` |
+| 错误响应 | 未携带或错误 Token 返回 401/403 |
+
+### 功能开关配置
+
+在 `conf.py` 中可以配置各项功能的启用状态：
+
+| 配置项 | 说明 | 默认值 |
+|--------|------|--------|
+| `enable_playwright_mcp` | Playwright 浏览器 MCP | `True` |
+| `enable_bazi_mcp` | 八字算命 MCP | `True` |
+| `enable_websearch` | 联网搜索工具 | `True` |
+| `enable_view_text_file` | 查看文本文件工具 | `True` |
+| `enable_write_text_file` | 写入文本文件工具 | `True` |
+| `enable_insert_text_file` | 插入文本工具 | `True` |
+| `enable_execute_shell_command` | 执行 Shell 命令工具 | `True` |
+| `enable_subagent` | 子代理委托功能 | `True` |
+| `enable_cron` | 定时任务管理 | `True` |
+| `enable_agentrun_browser_mcp` | 阿里云 AgentRun 浏览器 MCP | `False` |
+| `enable_sandbox` | Docker 沙箱 MCP（需 Linux/Mac） | `False` |
 
 ### 启动服务
 
@@ -236,6 +256,21 @@ python server.py
 ```
 
 服务启动后，访问 http://localhost:8000 即可使用。
+
+### 并发测试
+
+项目包含并发测试脚本 `test_parallel.py`，用于验证 Session 请求队列、并发处理和取消机制：
+
+```bash
+# 确保服务器已运行在 http://localhost:8000
+python test_parallel.py
+```
+
+**测试内容：**
+- 同一 Session 的请求队列处理（顺序执行）
+- 不同 Session 的并发请求（并行执行）
+- 取消队列中的请求（精准打断）
+- Session 过期回收测试（65秒过期验证）
 
 ### 内置工具列表
 
@@ -260,10 +295,12 @@ python server.py
 
 ### MCP 集成
 
-| MCP 名称 | 类型 | 传输协议 | 功能描述 |
-|---------|------|---------|---------|
-| Playwright-MCP | 有状态 | stdio | 浏览器自动化控制，支持页面操作、截图、数据提取 |
-| Bazi-MCP | 无状态 | SSE | 八字算命服务，基于出生日期时辰的命理分析 |
+| MCP 名称 | 类型 | 传输协议 | 功能描述 | 启用状态 |
+|---------|------|---------|---------|---------|
+| Playwright-MCP | 有状态 | stdio | 浏览器自动化控制，支持页面操作、截图、数据提取 | 默认启用 |
+| Bazi-MCP | 无状态 | SSE | 八字算命服务，基于出生日期时辰的命理分析 | 默认启用 |
+| AgentRun-Browser | 有状态 | HTTP | 阿里云 AgentRun 浏览器 MCP（streamable_http 协议） | 默认关闭 |
+| Sandbox-Browser | 有状态 | stdio | Docker 沙箱浏览器 MCP（需要 Linux/Mac + Docker） | 默认关闭 |
 
 ### API 接口列表
 
@@ -476,8 +513,6 @@ data: {"msg_id": "msg-001", "last": true, "contents": [{"type": "text", "content
 │   │   └── planning.png   # 深度研究截图
 │   └── music/             # 音乐资源
 └── .agent/skills/         # 技能插件目录
-    ├── find-skills/
-    ├── skill-creator/
-    ├── alibaba-stock/
-    └── alibaba-sentiment-analyzer/
+    ├── find-skills/         # 帮助用户发现和安装 Agent Skills
+    └── skill-creator/       # 创建和优化技能，支持性能评估
 ```

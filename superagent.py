@@ -12,13 +12,10 @@ from agentscope.pipeline import stream_printing_messages
 from agentscope.plan import PlanNotebook
 from agentscope.session import JSONSession
 from model import OpenAIChatModelCached, VLTokenCounter
-from session import Session, GlobalSessionManager, SessionStatus
-from tools import build_agent_toolkit, build_subagent_tool, FLAGS, AGENT_SYS_PROMPT, SUBAGENT_PROMPT
-from cron_manager import CronManager
+from session import Session, SessionStatus, SESS_MGR
+from tools import build_agent_toolkit, build_subagent_tool, AGENT_SYS_PROMPT, SUBAGENT_PROMPT
+from conf import FLAGS
 from datamodel import AgentStates
-
-sess_mgr = GlobalSessionManager(expires=60, enable_sandbox=FLAGS["enable_sandbox"])
-cron_mgr = CronManager(sess_mgr)
 
 async def register_reasoning_hint(agent):
     async def add_reasoning_hint(agent,kwargs):
@@ -42,11 +39,10 @@ async def agent_runner(sess: Session):
     while True:
         request,status = await sess.get_request()
         if status==SessionStatus.INACTIVE:
-            print(f'session {sess.session_id} is inactive')
-            await sess_mgr.delete_session(sess.session_id) # 内存中淘汰会话，下一个请求正常响应；已经持有session对象的请求add request会立即拒绝；
+            await SESS_MGR.delete_session(sess.session_id) # 内存中淘汰会话，下一个请求正常响应；已经持有session对象的请求add request会立即拒绝；
             await sess.release() # 释放MCP资源
             break
-        
+
         await sess.activate() 
 
         # 请求处理
@@ -57,10 +53,10 @@ async def agent_runner(sess: Session):
 
             extra_sys_prompt = []
             if FLAGS["enable_subagent"]:
-                toolkit.register_tool_function(await build_subagent_tool(sess_mgr))
+                toolkit.register_tool_function(await build_subagent_tool())
                 extra_sys_prompt.append(SUBAGENT_PROMPT)
             extra_sys_prompt='\n'.join(extra_sys_prompt)
-
+    
             plan_notebook=None
             if request.deepresearch:
                 plan_notebook=PlanNotebook()
@@ -139,12 +135,12 @@ async def agent_runner(sess: Session):
                                 msg_ret['contents'].append({"type": "tool_use", "tool_use_id": content["id"], "content": f'{content["name"]}: {json.dumps(content["input"], ensure_ascii=False)}'})
                             elif content['type']=='tool_result':
                                 msg_ret['contents'].append({"type": "tool_result", "tool_use_id": content["id"], "content": f'{content["name"]}: {json.dumps(content["output"], ensure_ascii=False)}'})
-                        await q.put(f"data: {json.dumps(msg_ret, ensure_ascii=False)}\n\n")
+                        await q.put(msg_ret)
                     await session.save_session_state(session_id=session_id,memory=agent.memory)
                 except asyncio.CancelledError as e:
-                    await q.put(f"data: {json.dumps({'msg_id': None,'last': True,'contents':[],'plan':None, 'cancel':True}, ensure_ascii=False)}\n\n")
+                    await q.put({'msg_id': None,'last': True,'contents':[],'plan':None, 'cancel':True})
                 except Exception as e:
-                    await q.put(f"data: {json.dumps({'msg_id': None,'last': True,'contents':[],'plan':None, 'error':str(e)}, ensure_ascii=False)}\n\n")
+                    await q.put({'msg_id': None,'last': True,'contents':[],'plan':None, 'error':str(e)})
                 finally:
                     await q.put(None)
             request.stream_task = asyncio.create_task(streaming())
@@ -160,7 +156,7 @@ async def agent_runner(sess: Session):
             await sess.finish_request(request)
 
 async def create_agent_if_not_exists(session_id: str) -> Session:
-    sess=await sess_mgr.get_or_create_session(session_id,create=True,session_main=agent_runner)
+    sess=await SESS_MGR.get_or_create_session(session_id,create=True,session_main=agent_runner)
     return sess
 
 #### services

@@ -1,6 +1,5 @@
 import asyncio
 import httpx
-import json
 
 async def test_simple_request():
     """测试单个简单请求"""

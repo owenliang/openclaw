@@ -11,6 +11,7 @@ from agentscope_runtime.engine.services.sandbox import SandboxService
 from agentscope_runtime.sandbox.box.sandbox import Sandbox
 
 from datamodel import AgentRequest
+from conf import FLAGS
 
 BROWSER_TOOLS=[
     "browser_close",
@@ -199,3 +200,6 @@ class GlobalSessionManager:
     def temp_session(self):
         session_id = str(uuid.uuid4())
         return Session(session_id, self.sandbox_service)
+
+
+SESS_MGR = GlobalSessionManager(expires=60, enable_sandbox=FLAGS["enable_sandbox"])

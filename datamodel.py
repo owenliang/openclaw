@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from typing import List
 from pydantic import BaseModel
-from agentscope.message import ImageBlock, Msg, TextBlock 
+from agentscope.message import ImageBlock, TextBlock 
 from agentscope.memory import MemoryBase
 
 class ChatRequest(BaseModel):
