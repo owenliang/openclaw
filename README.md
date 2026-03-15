@@ -250,6 +250,7 @@ AgentScope 内置完整的定时任务调度系统，通过 `CronManager` 单例
 | **语义搜索** | `memory_search` 工具支持基于语义的记忆检索 |
 | **持久化** | 记忆写入 `.reme/` 目录，重启后仍可检索 |
 | **多后端** | 支持 SQLite（内建）、Chroma、Qdrant 等向量库 |
+| **自动索引** | File Watcher 监听 `.reme/` 目录，文件变更时自动增量构建 SQLite 全文检索（FTS）+ 向量嵌入混合检索索引 |
 
 ### 5.2 开启方式
 
@@ -272,7 +273,35 @@ pip install -e "ReMe/.[light]"
 "enable_reme": True
 ```
 
-### 5.3 相关工具
+## 5.3 自定义摘要压缩提示词
+
+**背景问题**：ReMe 的短期记忆压缩（`compact_memory`）采用滚动累积摘要策略，每次压缩时将旧摘要作为 `previous_summary` 传入 LLM，要求其合并新旧内容生成新摘要。默认提示词中包含 `PRESERVE all existing information`，导致 LLM 每轮只增不减地追加内容，多次压缩后摘要会持续膨胀（实测可超过 2 万字）。
+
+当摘要过长时，会触发以下断言错误：
+
+```
+AssertionError: assert self.memory_compact_threshold > self.memory_compact_reserve
+```
+
+原因：摘要本身占用的 token 超过了剩余 context budget，导致 `left_compact_threshold < memory_compact_reserve`。
+
+**解决方案**：覆盖 `ReMe/reme/memory/file_based/components/compactor.yaml` 中的更新规则，将策略从"保留一切"改为"只留未完成的，淘汰已完成的"，并强制限制输出字数：
+
+```yaml
+# ReMe/reme/memory/file_based/components/compactor.yaml
+update_user_message_suffix_zh: |
+  将新消息合并到现有摘要中。严格规则：
+  - 删除"已完成"中所有与当前工作无关的旧任务，不要保留
+  - 大力淘汰过时的决策、旧上下文、已被取代的信息
+  - 只保留：未完成的目标、活跃的阻塞问题、当前进行中的工作、仍需要的关键上下文
+  - 将重复或相似的条目合并为一条简洁的记录
+  - 硬性字数限制：整个输出必须控制在2000字以内
+  # ... 其余格式模板 ...
+```
+
+修改后摘要大小可从 2 万字以上稳定控制在 2000 字以内（压缩率约 92%），彻底消除摘要膨胀导致的断言错误。
+
+### 5.4 相关工具
 
 | 工具名称 | 功能 |
 |---------|------|
