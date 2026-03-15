@@ -285,7 +285,15 @@ AssertionError: assert self.memory_compact_threshold > self.memory_compact_reser
 
 原因：摘要本身占用的 token 超过了剩余 context budget，导致 `left_compact_threshold < memory_compact_reserve`。
 
-**解决方案**：覆盖 `ReMe/reme/memory/file_based/components/compactor.yaml` 中的更新规则，将策略从"保留一切"改为"只留未完成的，淘汰已完成的"，并强制限制输出字数：
+**解决方案**：修改本项目 `ReMe/` 子目录下的以下文件：
+
+```
+ReMe/reme/memory/file_based/components/compactor.yaml
+```
+
+> 该文件是 ReMe 子模块的一部分，随 `git clone` 或 `pip install -e "ReMe/.[light]"` 一并安装。直接在此路径编辑即可，无需额外配置，修改后重启服务生效。
+
+将更新规则从"保留一切"改为"只留未完成的，淘汰已完成的"，并强制限制输出字数：
 
 ```yaml
 # ReMe/reme/memory/file_based/components/compactor.yaml
