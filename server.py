@@ -133,7 +133,7 @@ async def history(session_id: str):
     states=await load_agent_states(session_id)
     if states is None:
         return {"status": "session not exists", "session_id": session_id}
-    history=await states.memory.get_memory()
+    history=await states.memory.get_memory(exclude_mark='compressed')
     return {"status": "success", "session_id": session_id, "history": history}
 
 if __name__ == "__main__":

@@ -274,7 +274,7 @@ async def build_subagent_tool():
                     enable=True,
                     agent_token_counter=VLTokenCounter(),
                     trigger_threshold=60*1000,
-                    keep_recent=5,
+                    keep_recent=3,
                     compression_model=OpenAIChatModel(
                         model_name="qwen3.5-plus",
                         api_key=os.environ["DASHSCOPE_API_KEY"],

@@ -46,7 +46,7 @@ async def register_reme(agent: ReActAgent):
             max_input_length=100*1000, # qwen3.5 100K context window
             compact_ratio=0.6,
             enable_tool_result_compact=True,
-            tool_result_compact_keep_n=5,
+            tool_result_compact_keep_n=3,
         )
         if compressed_summary:
             await agent.memory.update_compressed_summary(compressed_summary)
@@ -142,7 +142,7 @@ async def agent_runner(sess: Session):
                     enable=True,
                     agent_token_counter=VLTokenCounter(),
                     trigger_threshold=60*1000,
-                    keep_recent=5,
+                    keep_recent=3,
                     compression_model=OpenAIChatModel(
                          # 百炼只有部分模型支持json schema: https://bailian.console.aliyun.com/cn-beijing/?spm=5176.29619931.J_PvCec88exbQTi-U433Fxg.4.74cd10d7jGKMNJ&tab=doc#/doc/?type=model&url=2862209
                         model_name="qwen-plus",

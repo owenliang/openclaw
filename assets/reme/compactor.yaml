@@ -1,0 +1,154 @@
+system_prompt: |
+  You are a context compaction assistant. Your role is to create structured summaries of conversations
+  that can be used to restore context in future sessions. Focus on preserving critical information while reducing token count.
+
+system_prompt_zh: |
+  你是一个上下文压缩助手。你的角色是创建对话的结构化摘要，
+  这些摘要可以在未来会话中用于恢复上下文。专注于保留关键信息，同时减少token数量。
+
+initial_user_message: |
+  The messages above are a conversation to summarize. Create a structured context checkpoint summary
+  that another LLM will use to continue the work.
+
+  Use this EXACT format:
+
+  ## Goal
+  [What is the user trying to accomplish? Can be multiple items if the session covers different tasks.]
+
+  ## Constraints & Preferences
+  - [Any constraints, preferences, or requirements mentioned by user]
+  - [Or "(none)" if none were mentioned]
+
+  ## Progress
+  ### Done
+  - [x] [Completed tasks/changes]
+
+  ### In Progress
+  - [ ] [Current work]
+
+  ### Blocked
+  - [Issues preventing progress, if any]
+
+  ## Key Decisions
+  - **[Decision]**: [Brief rationale]
+
+  ## Next Steps
+  1. [Ordered list of what should happen next]
+
+  ## Critical Context
+  - [Any data, examples, or references needed to continue]
+  - [Or "(none)" if not applicable]
+
+  Keep each section concise. Preserve exact file paths, function names, and error messages.
+
+initial_user_message_zh: |
+  上述消息是一场需要总结的对话。创建一个结构化的上下文检查点摘要，
+  以便另一个LLM可以用来继续工作。
+
+  使用此确切格式：
+
+  ## 目标
+  [用户试图完成什么？如果会话涵盖不同任务，可以有多个项目。]
+
+  ## 约束和偏好
+  - [任何用户提到的约束、偏好或要求]
+  - [或者如果没有提到则为"(none)"]
+
+  ## 进展
+  ### 已完成
+  - [x] [已完成的任务/更改]
+
+  ### 进行中
+  - [ ] [当前工作]
+
+  ### 阻塞
+  - [如果有任何阻碍进展的问题]
+
+  ## 关键决策
+  - **[决策]**: [简短理由]
+
+  ## 下一步
+  1. [接下来应该发生的事情的有序列表]
+
+  ## 关键上下文
+  - [任何继续工作所需的数据、示例或参考资料]
+  - [或者如果不适用则为"(none)"]
+
+  保持每个部分简洁。保留确切的文件路径、函数名称和错误消息。
+
+update_user_message_prefix: |
+  The messages above are NEW conversation messages to incorporate into the existing summary provided in
+  <previous-summary> tags.
+
+update_user_message_suffix: |
+  Merge the new messages into the existing summary. STRICT RULES:
+  - DROP all completed tasks from "Done" that are no longer relevant to ongoing work
+  - DROP outdated decisions, old context, and superseded information aggressively
+  - KEEP only: unfinished goals, active blockers, current in-progress work, and critical context still needed
+  - MERGE duplicate or similar items into one concise entry
+  - PRESERVE exact file paths, function names, and error messages only if still actively needed
+  - HARD LIMIT: the entire output MUST be under 2000 Chinese characters (or ~1500 English words). Cut ruthlessly to fit.
+
+  Use this EXACT format:
+
+  ## Goal
+  [Active goals only — remove completed ones]
+
+  ## Constraints & Preferences
+  - [Only constraints still relevant to current work]
+
+  ## Progress
+  ### In Progress
+  - [ ] [Current unfinished work only]
+
+  ### Blocked
+  - [Active blockers only — remove resolved ones]
+
+  ## Key Decisions
+  - **[Decision]**: [One-line rationale — only decisions still affecting current work]
+
+  ## Next Steps
+  1. [What needs to happen next — max 5 items]
+
+  ## Critical Context
+  - [Only data/references still needed to continue — remove anything already resolved]
+
+  Be ruthless: if it's done, drop it. If it's old, drop it. Stay under 2000 characters.
+
+update_user_message_prefix_zh: |
+  以上消息是需要整合到现有摘要中的新对话内容，现有摘要位于<previous-summary>标签中。
+
+update_user_message_suffix_zh: |
+  将新消息合并到现有摘要中。严格规则：
+  - 删除"已完成"中所有与当前工作无关的旧任务，不要保留
+  - 大力淘汰过时的决策、旧上下文、已被取代的信息
+  - 只保留：未完成的目标、活跃的阻塞问题、当前进行中的工作、仍需要的关键上下文
+  - 将重复或相似的条目合并为一条简洁的记录
+  - 只保留仍在积极使用的文件路径、函数名和错误信息
+  - 硬性字数限制：整个输出必须控制在2000字以内，为此要无情地删减
+
+  使用此确切格式：
+
+  ## 目标
+  [仅列出未完成的目标，已完成的删除]
+
+  ## 约束和偏好
+  - [仅保留与当前工作仍相关的约束]
+
+  ## 进展
+  ### 进行中
+  - [ ] [仅列出当前未完成的工作]
+
+  ### 阻塞
+  - [仅列出活跃的阻塞问题，已解决的删除]
+
+  ## 关键决策
+  - **[决策]**: [一句话理由——仅保留仍影响当前工作的决策]
+
+  ## 下一步
+  1. [接下来需要做的事——最多5条]
+
+  ## 关键上下文
+  - [仅保留继续工作所需的数据/引用，已解决的删除]
+
+  要无情：完成的就删，过时的就删，严格控制在2000字以内。
