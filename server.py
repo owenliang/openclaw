@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.base import BaseHTTPMiddleware
 from datamodel import AgentRequest, ChatRequest
 from superagent import create_agent_if_not_exists, SESS_MGR, load_agent_states
-from tools import load_persona_file
+from tools import load_persona_file, modify_persona_file
 from cron_manager import CRON_MGR
 from dotenv import load_dotenv
 import uvicorn
@@ -91,6 +91,18 @@ async def get_personas():
         "soul": load_persona_file("SOUL.md"),
         "user": load_persona_file("USER.md"),
     }
+
+@app.post('/update_persona')
+async def update_persona(request: Request):
+    FILE_MAP = {"agents": "AGENTS.md", "soul": "SOUL.md", "user": "USER.md"}
+    body = await request.json()
+    target = body.get("target", "")
+    content = body.get("content", "")
+    filename = FILE_MAP.get(target)
+    if not filename:
+        return {"status": "error", "message": f"unknown target: {target}"}
+    modify_persona_file(filename, content)
+    return {"status": "success"}
 
 @app.get("/get_crons")
 async def get_crons():

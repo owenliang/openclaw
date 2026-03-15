@@ -1945,7 +1945,9 @@
             // 人格设定状态
             const [personas, setPersonas] = useState({ agents: '', soul: '', user: '' });
             const [personasLoading, setPersonasLoading] = useState(false);
-
+            const [personasEditing, setPersonasEditing] = useState({});
+            const [personasSaving, setPersonasSaving] = useState({});
+            
             // 使用 ref 来跟踪是否正在加载技能，避免并发重复请求
             const skillsLoadingRef = useRef(false);
 
@@ -3290,17 +3292,45 @@
                                     <div style={{ textAlign: 'center', padding: '40px', color: '#888' }}>加载中...</div>
                                 ) : [
                                     { key: 'agents', title: 'AGENTS.md', icon: '🤖', desc: '行为规范与优先级' },
-                                    { key: 'soul',   title: 'SOUL.md',   icon: '✨', desc: '人格语气与风格' },
+                                    { key: 'soul',   title: 'SOUL.md',   icon: '✨', desc: '语气风格与定位' },
                                     { key: 'user',   title: 'USER.md',   icon: '👤', desc: '用户画像与偏好' },
-                                ].map(({ key, title, icon, desc }) => (
-                                    <div key={key} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '12px', border: '1px solid #e8e8e8' }}>
-                                        <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                                            <span>{icon}</span><span>{title}</span>
-                                            <span style={{ fontWeight: 400, fontSize: '12px', color: '#888', marginLeft: '4px' }}>{desc}</span>
+                                ].map(({ key, title, icon, desc }) => {
+                                    const isEditing = key in personasEditing;
+                                    const isSaving = !!personasSaving[key];
+                                    const editValue = isEditing ? personasEditing[key] : personas[key];
+                                    return (
+                                        <div key={key} style={{ background: '#f8f9fa', borderRadius: '8px', padding: '12px', border: '1px solid #e8e8e8' }}>
+                                            <div style={{ fontWeight: 600, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                                <span>{icon}</span><span>{title}</span>
+                                                <span style={{ fontWeight: 400, fontSize: '12px', color: '#888', marginLeft: '4px' }}>{desc}</span>
+                                                <span style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                                                    {!isEditing ? (
+                                                        <button onClick={() => setPersonasEditing(p => ({ ...p, [key]: personas[key] || '' }))} style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '4px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}>编辑</button>
+                                                    ) : (
+                                                        <>
+                                                            <button disabled={isSaving} onClick={() => {
+                                                                setPersonasSaving(p => ({ ...p, [key]: true }));
+                                                                fetch('/update_persona', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ target: key, content: personasEditing[key] }) })
+                                                                    .then(r => r.json())
+                                                                    .then(() => {
+                                                                        setPersonas(p => ({ ...p, [key]: personasEditing[key] }));
+                                                                        setPersonasEditing(p => { const n = { ...p }; delete n[key]; return n; });
+                                                                    })
+                                                                    .finally(() => setPersonasSaving(p => { const n = { ...p }; delete n[key]; return n; }));
+                                                            }} style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '4px', border: '1px solid #4caf50', background: isSaving ? '#eee' : '#4caf50', color: isSaving ? '#999' : '#fff', cursor: isSaving ? 'not-allowed' : 'pointer' }}>{isSaving ? '保存中...' : '保存'}</button>
+                                                            <button onClick={() => setPersonasEditing(p => { const n = { ...p }; delete n[key]; return n; })} style={{ fontSize: '12px', padding: '2px 10px', borderRadius: '4px', border: '1px solid #ccc', background: '#fff', cursor: 'pointer' }}>取消</button>
+                                                        </>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            {isEditing ? (
+                                                <textarea value={editValue} onChange={e => setPersonasEditing(p => ({ ...p, [key]: e.target.value }))} style={{ width: '100%', minHeight: '200px', fontSize: '13px', fontFamily: 'inherit', padding: '8px', borderRadius: '4px', border: '1px solid #ccc', resize: 'vertical', boxSizing: 'border-box' }} />
+                                            ) : (
+                                                <pre style={{ margin: 0, fontSize: '13px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#333', fontFamily: 'inherit', maxHeight: '300px', overflowY: 'auto' }}>{personas[key] || '(未定义)'}</pre>
+                                            )}
                                         </div>
-                                        <pre style={{ margin: 0, fontSize: '13px', whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#333', fontFamily: 'inherit', maxHeight: '300px', overflowY: 'auto' }}>{personas[key] || '(未定义)'}</pre>
-                                    </div>
-                                ))}
+                                    );
+                                })}
                             </div>
                         )}
                 </div>
