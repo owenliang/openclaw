@@ -14,7 +14,7 @@ from agentscope.plan import PlanNotebook
 from agentscope.session import JSONSession
 from model import OpenAIChatModelCached, VLTokenCounter
 from session import Session, SessionStatus, SESS_MGR
-from tools import build_agent_toolkit, build_subagent_tool, SUBAGENT_PROMPT, REME_PROMPT, AGENT_PERSONA_PROMPT,CRON_PROMPT, init_reme, format_system_prompt
+from tools import build_agent_toolkit, build_subagent_tool, SUBAGENT_PROMPT, REME_PROMPT, AGENT_PERSONA_PROMPT,CRON_PROMPT, REASONING_HINT_TEMPLATE, init_reme, format_system_prompt
 from conf import FLAGS
 from datamodel import AgentStates
 if FLAGS["enable_reme"]:
@@ -62,13 +62,14 @@ async def register_reasoning_hint(agent: ReActAgent):
         weekday_map = ['周一', '周二', '周三', '周四', '周五', '周六', '周日']
         weekday = weekday_map[now.weekday()]
         current_time = now.strftime(f"%Y年%m月%d日 {weekday} %H:%M:%S")
-        await agent.memory.add(Msg(name="current_time", content=f"当前时间(内部参考信息,非用户输入)：{current_time}", role="user"), marks='MY_REASONING_HINT')
+        hint_content = REASONING_HINT_TEMPLATE.format(current_time=current_time)
+        await agent.memory.add(Msg(name="inner_hint", content=hint_content, role="user"), marks='MY_REASONING_HINT')
     async def remove_reasoning_hint(agent: ReActAgent,kwargs,output=None):
         await agent.memory.delete_by_mark(mark='MY_REASONING_HINT')
     agent.register_instance_hook('pre_reasoning','add_reasoning_hint',add_reasoning_hint)
     agent.register_instance_hook('post_reasoning','remove_reasoning_hint',remove_reasoning_hint)
 
-async def register_sess_keepalive(agent: ReActAgent,sess):
+async def register_sess_keepalive(agent: ReActAgent,sess: Session):
     async def activate_sess_client(agent:ReActAgent,kwargs,output=None):
         await sess.activate()
     for hooks in ['pre_reasoning', 'pre_acting', 'post_acting', 'post_reasoning']:
@@ -133,8 +134,6 @@ async def agent_runner(sess: Session):
             await session.load_session_state(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
 
             agent.set_console_output_enabled(False)
-            await register_sess_keepalive(agent,sess)
-            await register_reasoning_hint(agent)
             if FLAGS["enable_reme"]:
                 await register_reme(agent)
             else:
@@ -158,6 +157,8 @@ async def agent_runner(sess: Session):
                         }
                     ),
                 )
+            await register_sess_keepalive(agent,sess)
+            await register_reasoning_hint(agent)
 
             inputs = Msg(
                 name="user",
