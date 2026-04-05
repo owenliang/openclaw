@@ -75,6 +75,16 @@ async def register_sess_keepalive(agent: ReActAgent,sess: Session):
     for hooks in ['pre_reasoning', 'pre_acting', 'post_acting', 'post_reasoning']:
         agent.register_instance_hook(hooks,'activate_sess_client',activate_sess_client)
 
+async def register_memory_autosave(agent: ReActAgent,sess: Session):
+    first_reasoning=True
+    async def autosave_session(agent:ReActAgent,kwargs):
+        nonlocal first_reasoning    
+        if not first_reasoning: # Agent Loop第一次reasoning不需要保存memory
+            session=JSONSession(save_dir=".sessions")
+            await session.save_session_state(session_id=sess.session_id,memory=agent.memory)
+        first_reasoning=False
+    agent.register_instance_hook('pre_reasoning','sess_autosave',autosave_session)
+
 async def agent_runner(sess: Session):
     while True:
         request,status = await sess.get_request()
@@ -106,7 +116,7 @@ async def agent_runner(sess: Session):
                 name="Owen",
                 sys_prompt=format_system_prompt(extra_sys_prompt),
                 model=OpenAIChatModelCached(
-                    model_name="qwen3.5-plus",
+                    model_name="qwen3.6-plus",
                     api_key=os.environ["DASHSCOPE_API_KEY"],
                     stream=True,
                     client_kwargs={
@@ -158,8 +168,9 @@ async def agent_runner(sess: Session):
                     ),
                 )
             await register_sess_keepalive(agent,sess)
+            await register_memory_autosave(agent,sess)
             await register_reasoning_hint(agent)
-
+            
             inputs = Msg(
                 name="user",
                 content=request.content,

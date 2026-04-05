@@ -280,7 +280,7 @@ async def build_subagent_tool():
                 name="Owen",
                 sys_prompt=format_system_prompt(extra_sys_prompt),
                 model=OpenAIChatModelCached(
-                    model_name="qwen3.5-plus",
+                    model_name="qwen3.6-plus",
                     api_key=os.environ["DASHSCOPE_API_KEY"],
                     stream=True,
                     client_kwargs={
@@ -307,7 +307,7 @@ async def build_subagent_tool():
                     trigger_threshold=60*1000,
                     keep_recent=3,
                     compression_model=OpenAIChatModel(
-                        model_name="qwen3.5-plus",
+                        model_name="qwen3.6-plus",
                         api_key=os.environ["DASHSCOPE_API_KEY"],
                         stream=False,
                         client_kwargs={
