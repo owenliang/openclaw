@@ -2,7 +2,7 @@ import asyncio
 import uuid
 from typing import List
 from pydantic import BaseModel
-from agentscope.message import ImageBlock, TextBlock 
+from agentscope.message import ImageBlock, TextBlock ,ToolUseBlock
 from agentscope.memory import MemoryBase
 
 class ChatRequest(BaseModel):
@@ -33,3 +33,15 @@ class AgentStates:
     def __init__(self, session_id: str, memory: MemoryBase):
         self.session_id = session_id
         self.memory = memory
+
+class PendingToolUse:
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+    def __init__(self,tool_use:ToolUseBlock):
+        self.tool_use = tool_use
+        self.status = PendingToolUse.PENDING
+
+    def __repr__(self):
+        return f"PendingToolUse(tool_use={self.tool_use}, status={self.status})"

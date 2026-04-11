@@ -16,7 +16,9 @@ from model import OpenAIChatModelCached, VLTokenCounter
 from session import Session, SessionStatus, SESS_MGR
 from tools import build_agent_toolkit, build_subagent_tool, SUBAGENT_PROMPT, REME_PROMPT, AGENT_PERSONA_PROMPT,CRON_PROMPT, REASONING_HINT_TEMPLATE, init_reme, format_system_prompt
 from conf import FLAGS
-from datamodel import AgentStates
+from datamodel import AgentStates,AgentRequest,PendingToolUse
+from openclaw import OpenClaw
+
 if FLAGS["enable_reme"]:
     from reme.reme_light import ReMeInMemoryMemory
 
@@ -85,6 +87,24 @@ async def register_memory_autosave(agent: ReActAgent,sess: Session):
         first_reasoning=False
     agent.register_instance_hook('pre_reasoning','sess_autosave',autosave_session)
 
+async def handle_magic_command(request: AgentRequest, sess: Session):
+    text=[block['text'] for block in request.content if block['type']=='text']
+    if not text:
+        return
+
+    cmd=text[0].strip()
+    if cmd.startswith("/"):
+        cmd=cmd[1:]
+        print(f"Magic command: {text}")
+        if cmd=='approve': 
+            pending_tool=await sess.get_pending_tool()
+            if pending_tool:
+                pending_tool.status=PendingToolUse.APPROVED
+        elif cmd=='reject':
+            pending_tool=await sess.get_pending_tool()
+            if pending_tool:
+                pending_tool.status=PendingToolUse.REJECTED
+
 async def agent_runner(sess: Session):
     while True:
         request,status = await sess.get_request()
@@ -94,6 +114,9 @@ async def agent_runner(sess: Session):
             break
 
         await sess.activate() 
+
+        # 魔法命令
+        await handle_magic_command(request, sess)
 
         # 请求处理
         try:
@@ -112,7 +135,7 @@ async def agent_runner(sess: Session):
             plan_notebook=None
             if request.deepresearch:
                 plan_notebook=PlanNotebook()
-            agent=ReActAgent(
+            agent=OpenClaw(
                 name="Owen",
                 sys_prompt=format_system_prompt(extra_sys_prompt),
                 model=OpenAIChatModelCached(
@@ -139,6 +162,7 @@ async def agent_runner(sess: Session):
                 parallel_tool_calls=True,
                 memory=ReMeInMemoryMemory(hf_token_counter) if FLAGS["enable_reme"] else InMemoryMemory(),
                 max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
+                sess=sess,
             )
             session=JSONSession(save_dir=".sessions")
             await session.load_session_state(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
@@ -196,6 +220,7 @@ async def agent_runner(sess: Session):
                 except asyncio.CancelledError as e:
                     await q.put({'msg_id': None,'last': True,'contents':[],'plan':None, 'cancel':True})
                 except Exception as e:
+                    print(f"Error in agent_runner: {e}")
                     await q.put({'msg_id': None,'last': True,'contents':[],'plan':None, 'error':str(e)})
                 finally:
                     await q.put(None)

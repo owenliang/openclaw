@@ -175,6 +175,12 @@ memory_search(query="关键词")
 </REME_PROMPT>
 """
 
+# ToolGuardMixin 工具被拒绝后的提示词模板
+TOOL_REJECTED_TEMPLATE = """
+(内部信息,非用户输入,禁止直接透露给用户)
+用户拒绝了 {tool_name} {tool_input} 执行，请判断是否还有其他未完成的事情，继续推进
+"""
+
 def load_persona_file(filename: str) -> str:
     filepath = os.path.join(".agent/defines", filename)
     try:

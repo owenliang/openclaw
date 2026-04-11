@@ -429,6 +429,49 @@
             color: #c62828;
         }
 
+        .tool-guard-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .tool-guard-btn {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .tool-guard-btn.approve {
+            background: linear-gradient(135deg, #43a047, #66bb6a);
+            color: white;
+        }
+
+        .tool-guard-btn.approve:hover {
+            box-shadow: 0 2px 8px rgba(67, 160, 71, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .tool-guard-btn.reject {
+            background: linear-gradient(135deg, #e53935, #ef5350);
+            color: white;
+        }
+
+        .tool-guard-btn.reject:hover {
+            box-shadow: 0 2px 8px rgba(229, 57, 53, 0.4);
+            transform: translateY(-1px);
+        }
+
+        .tool-guard-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
         .chat-input-container {
             padding: 20px;
             border-top: 1px solid #e0e0e0;
@@ -2044,6 +2087,14 @@
                                 // 如果是对象，尝试提取技能列表
                                 skillsList = Object.values(data);
                             }
+                            // 合并 magic 命令
+                            if (data.magics && Array.isArray(data.magics)) {
+                                const magicSkills = data.magics.map(magic => ({
+                                    ...magic,
+                                    isMagic: true
+                                }));
+                                skillsList = [...skillsList, ...magicSkills];
+                            }
                             setSkills(skillsList);
                             console.log('已加载技能列表:', skillsList);
                         })
@@ -2414,6 +2465,15 @@
 
                 // 发送消息
                 await doSendMessage(content, images, useDeepSearch);
+            };
+
+            // 快捷发送指令（用于 approve/reject 按钮）
+            const sendQuickCommand = async (command) => {
+                if (isLoading || isWaitingRequestId) {
+                    setPendingRequest({ content: command, images: [], deepSearch: false });
+                    return;
+                }
+                await doSendMessage(command, [], false);
             };
 
             // 发送排队中的消息
@@ -3034,12 +3094,21 @@
                                                 // 对 text 类型使用 markdown 渲染（兼容 item.text 和 item.content）
                                                 if (item.type === 'text' && typeof marked !== 'undefined') {
                                                     const textContent = item.text || item.content || '';
+                                                    const isToolGuard = textContent.includes('🔒') && textContent.includes('工具调用需要确认');
+                                                    const isLastAssistant = index === messages.length - 1;
                                                     return (
-                                                        <div 
-                                                            key={idx} 
-                                                            className={`message-content-item ${item.type} markdown-content`}
-                                                            dangerouslySetInnerHTML={{ __html: marked.parse(textContent) }}
-                                                        />
+                                                        <div key={idx}>
+                                                            <div 
+                                                                className={`message-content-item ${item.type} markdown-content`}
+                                                                dangerouslySetInnerHTML={{ __html: marked.parse(textContent) }}
+                                                            />
+                                                            {isToolGuard && isLastAssistant && !isLoading && (
+                                                                <div className="tool-guard-actions">
+                                                                    <button className="tool-guard-btn approve" onClick={() => sendQuickCommand('/approve')}>✅ 允许执行</button>
+                                                                    <button className="tool-guard-btn reject" onClick={() => sendQuickCommand('/reject')}>❌ 拒绝执行</button>
+                                                                </div>
+                                                            )}
+                                                        </div>
                                                     );
                                                 }
                                                 

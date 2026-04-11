@@ -2,7 +2,7 @@ import asyncio
 import time
 import uuid
 from enum import Enum
-from typing import Callable, Dict, Literal
+from typing import Callable, Dict, Literal, List
 
 from agentscope.mcp import HttpStatefulClient, StdIOStatefulClient
 from agentscope.tool import Toolkit
@@ -10,7 +10,7 @@ from agentscope_runtime.adapters.agentscope.tool import sandbox_tool_adapter
 from agentscope_runtime.engine.services.sandbox import SandboxService
 from agentscope_runtime.sandbox.box.sandbox import Sandbox
 
-from datamodel import AgentRequest
+from datamodel import AgentRequest, PendingToolUse
 from conf import FLAGS
 
 BROWSER_TOOLS=[
@@ -68,6 +68,23 @@ class Session:
         self.expires = expires
         self.status=SessionStatus.ACTIVE
         self.pending_req: Dict[str, AgentRequest] = {} 
+        self.pending_tool_calls: List[PendingToolUse] =[]
+
+    async def add_pending_tool(self, pending_tool: PendingToolUse):
+        async with self.lock:
+            self.pending_tool_calls.append(pending_tool)
+
+    async def get_pending_tool(self) -> PendingToolUse | None:
+        async with self.lock:
+            if self.pending_tool_calls:
+                return self.pending_tool_calls[0]
+            return None
+
+    async def pop_pending_tool(self) -> PendingToolUse | None:
+        async with self.lock:
+            if self.pending_tool_calls:
+                return self.pending_tool_calls.pop(0)
+            return None
 
     def _activate(self):
         self.last_activate = time.time()

@@ -82,7 +82,14 @@ async def get_commands():
             except BaseException as e:
                 print(f"Error registering skill {skill_dir}: {e}")
     skills_list = list(toolkit.skills.values())
-    return {"skills": skills_list}
+
+    # Magic 命令列表
+    magic_commands = [
+        {"name": "approve", "description": "批准待确认的工具调用"},
+        {"name": "reject", "description": "拒绝待确认的工具调用"}
+    ]
+
+    return {"skills": skills_list, "magics": magic_commands}
 
 @app.get('/get_personas')
 async def get_personas():
