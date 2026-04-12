@@ -10,8 +10,8 @@ FLAGS = {
     "enable_execute_shell_command": True,   # 是否启用执行Shell命令TOOL
     "enable_subagent":              True,   # 是否启用子代理
     "enable_cron":                  True,   # 是否启用定时任务管理
-    "enable_reme":                  True,   # 是否启用ReMe
+    "enable_reme":                  False,   # 是否启用ReMe
 }
 
 # 需要人工确认的工具列表（ToolGuardMixin 使用）
-GUARD_TOOLS = ['web_search']
+GUARD_TOOLS = ['write_text_file','insert_text_file','execute_shell_command']

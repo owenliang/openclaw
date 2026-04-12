@@ -414,21 +414,7 @@ AgentScope 内置完整的定时任务调度系统，通过 `CronManager` 单例
 
 ### 7.2 开启方式
 
-ReMe 为**可选依赖**，需单独安装：
-
-```bash
-# 方式一：克隆源码安装（推荐）
-git clone https://github.com/agentscope-ai/ReMe.git
-cd ReMe
-pip install -e ".[light]"
-```
-
-```bash
-# 方式二：在项目目录内已有 ReMe 子目录时
-pip install -e "ReMe/.[light]"
-```
-
-在 `conf.py` 中开启：
+ReMe 长期记忆功能已集成到项目中，无需手动安装。只需在 `conf.py` 中开启即可：
 ```python
 "enable_reme": True
 ```
