@@ -80,7 +80,7 @@ async def get_commands():
             try:
                 toolkit.register_agent_skill(os.path.join(".agent/skills", skill_dir))
             except BaseException as e:
-                print(f"Error registering skill {skill_dir}: {e}")
+                pass
     skills_list = list(toolkit.skills.values())
 
     # Magic 命令列表

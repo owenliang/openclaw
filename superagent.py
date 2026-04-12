@@ -3,7 +3,9 @@ from contextlib import asynccontextmanager
 import json
 import os
 import sys
+import traceback
 from datetime import datetime
+from agentscope import plan
 from agentscope.agent import ReActAgent
 from agentscope.formatter import OpenAIChatFormatter
 from agentscope.memory import InMemoryMemory
@@ -18,7 +20,7 @@ from tools import build_agent_toolkit, build_subagent_tool, SUBAGENT_PROMPT, REM
 from conf import FLAGS
 from datamodel import AgentStates,AgentRequest,PendingToolUse
 from openclaw import OpenClaw
-
+from agentscope import setup_logger
 if FLAGS["enable_reme"]:
     from reme.reme_light import ReMeInMemoryMemory
 
@@ -27,6 +29,7 @@ global reme, hf_token_counter
 @asynccontextmanager
 async def superagent_lifecycle():
     global reme, hf_token_counter
+    setup_logger(level="WARNING")
     try:    
         os.makedirs(".agent/skills/",exist_ok=True)
         if FLAGS["enable_reme"]:
@@ -43,7 +46,7 @@ async def register_reme(agent: ReActAgent):
         msg_to_keep,compressed_summary=await reme.pre_reasoning_hook(
             messages=messages, 
             compressed_summary=agent.memory._compressed_summary,
-            token_counter=hf_token_counter,
+            as_token_counter=hf_token_counter,
             system_prompt=agent.sys_prompt,
             max_input_length=100*1000, # qwen3.5 100K context window
             compact_ratio=0.6,
@@ -82,8 +85,7 @@ async def register_memory_autosave(agent: ReActAgent,sess: Session):
     async def autosave_session(agent:ReActAgent,kwargs):
         nonlocal first_reasoning    
         if not first_reasoning: # Agent Loop第一次reasoning不需要保存memory
-            session=JSONSession(save_dir=".sessions")
-            await session.save_session_state(session_id=sess.session_id,memory=agent.memory)
+            await save_session(session_id=sess.session_id,memory=agent.memory,plan_notebook=agent.plan_notebook)
         first_reasoning=False
     agent.register_instance_hook('pre_reasoning','sess_autosave',autosave_session)
 
@@ -104,6 +106,18 @@ async def handle_magic_command(request: AgentRequest, sess: Session):
             pending_tool=await sess.get_pending_tool()
             if pending_tool:
                 pending_tool.status=PendingToolUse.REJECTED
+
+async def save_session(session_id, **kwargs):
+    jsonSession=JSONSession(save_dir=".sessions")
+    state_dict={}
+    for k,v in kwargs.items():
+        if v is not None:
+            state_dict[k]=v
+    return await jsonSession.save_session_state(session_id=session_id,**state_dict)
+
+async def load_session(session_id,**kwargs):
+    jsonSession=JSONSession(save_dir=".sessions")
+    return await jsonSession.load_session_state(session_id=session_id,**kwargs)
 
 async def agent_runner(sess: Session):
     while True:
@@ -131,10 +145,12 @@ async def agent_runner(sess: Session):
             if FLAGS["enable_reme"]:
                 extra_sys_prompt.append(REME_PROMPT)
             extra_sys_prompt='\n'.join(extra_sys_prompt)
-    
+            
             plan_notebook=None
             if request.deepresearch:
                 plan_notebook=PlanNotebook()
+                await load_session(session_id, plan_notebook=plan_notebook)# 只恢复planning
+
             agent=OpenClaw(
                 name="Owen",
                 sys_prompt=format_system_prompt(extra_sys_prompt),
@@ -164,8 +180,8 @@ async def agent_runner(sess: Session):
                 max_iters=sys.maxsize, # 使用系统最大整数，支持长程执行
                 sess=sess,
             )
-            session=JSONSession(save_dir=".sessions")
-            await session.load_session_state(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
+            
+            await load_session(session_id=session_id,memory=agent.memory) # 只恢复短期记忆
 
             agent.set_console_output_enabled(False)
             if FLAGS["enable_reme"]:
@@ -216,11 +232,11 @@ async def agent_runner(sess: Session):
                             elif content['type']=='tool_result':
                                 msg_ret['contents'].append({"type": "tool_result", "tool_use_id": content["id"], "content": f'{content["name"]}: {json.dumps(content["output"], ensure_ascii=False)}'})
                         await q.put(msg_ret)
-                    await session.save_session_state(session_id=session_id,memory=agent.memory)
+                    await save_session(session_id, memory=agent.memory, plan_notebook=agent.plan_notebook)
                 except asyncio.CancelledError as e:
                     await q.put({'msg_id': None,'last': True,'contents':[],'plan':None, 'cancel':True})
                 except Exception as e:
-                    print(f"Error in agent_runner: {e}")
+                    print(f"Error in agent_runner: {e} {traceback.format_exc()}")
                     await q.put({'msg_id': None,'last': True,'contents':[],'plan':None, 'error':str(e)})
                 finally:
                     await q.put(None)
@@ -231,7 +247,7 @@ async def agent_runner(sess: Session):
                 if msg is None:
                     break
         except Exception as e:
-            print(f"Error in agent_runner: {e}")
+            print(f"Error in agent_runner: {e} {traceback.format_exc()}")
         finally:
             await response_q.put(None)
             await sess.finish_request(request)

@@ -2470,10 +2470,10 @@
             // 快捷发送指令（用于 approve/reject 按钮）
             const sendQuickCommand = async (command) => {
                 if (isLoading || isWaitingRequestId) {
-                    setPendingRequest({ content: command, images: [], deepSearch: false });
+                    setPendingRequest({ content: command, images: [], deepSearch: deepSearch });
                     return;
                 }
-                await doSendMessage(command, [], false);
+                await doSendMessage(command, [], deepSearch);
             };
 
             // 发送排队中的消息
