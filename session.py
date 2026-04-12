@@ -219,4 +219,4 @@ class GlobalSessionManager:
         return Session(session_id, self.sandbox_service)
 
 
-SESS_MGR = GlobalSessionManager(expires=60, enable_sandbox=FLAGS["enable_sandbox"])
+SESS_MGR = GlobalSessionManager(expires=300, enable_sandbox=FLAGS["enable_sandbox"])
